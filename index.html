@@ -236,10 +236,12 @@
         const cameraBox = document.getElementById('cameraBox');
 
         let isRunning = false;
+        let isArmed = false; // מצב דריכה מלאה אחרי הדיליי
         let lastFrameData = null;
         let animationFrameId = null;
         let lastTriggerTime = 0;
         let stream = null;
+        let countdownTimer = null;
 
         function log(msg) {
             logBox.innerHTML = `> ${msg}<br>` + logBox.innerHTML;
@@ -263,17 +265,33 @@
                     await video.play();
                     
                     isRunning = true;
+                    isArmed = false;
                     toggleBtn.innerText = "עצור מלכודת";
                     toggleBtn.classList.add('stop');
-                    statusDot.classList.add('active');
-                    statusText.innerText = "המלכודת דרוכה בשטח!";
-                    log("הצלחה: המצלמה פעילה והמערכת דרוכה.");
                     
                     canvas.width = 160;
                     canvas.height = 120;
                     lastFrameData = null;
                     
-                    detectMotion();
+                    // דיליי של 7 שניות לפני שהמלכודת נדרכת בפועל
+                    let timeLeft = 7;
+                    statusText.innerText = `התרחק מהשטח (${timeLeft})...`;
+                    log(`הפעלת טיימר: המלכודת תדרוך בעוד ${timeLeft} שניות.`);
+
+                    countdownTimer = setInterval(() => {
+                        timeLeft--;
+                        if (timeLeft > 0) {
+                            statusText.innerText = `התרחק מהשטח (${timeLeft})...`;
+                        } else {
+                            clearInterval(countdownTimer);
+                            isArmed = true;
+                            statusDot.classList.add('active');
+                            statusText.innerText = "המלכודת דרוכה בשטח!";
+                            log("הצלחה: המלכודת דרוכה וממתינה לתנועה.");
+                            detectMotion();
+                        }
+                    }, 1000);
+
                 } catch (err) {
                     log("שגיאה בהפעלת מצלמה: " + err.message);
                     alert("ודא שהרשאת המצלמה מאושרת בדפדפן.");
@@ -285,6 +303,8 @@
 
         function stopSystem() {
             isRunning = false;
+            isArmed = false;
+            if (countdownTimer) clearInterval(countdownTimer);
             if (stream) {
                 stream.getTracks().forEach(track => track.stop());
                 stream = null;
@@ -313,7 +333,7 @@
         }
 
         function detectMotion() {
-            if (!isRunning) return;
+            if (!isRunning || !isArmed) return;
 
             ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
             const currentFrame = ctx.getImageData(0, 0, canvas.width, canvas.height);
@@ -348,7 +368,7 @@
             }
 
             setTimeout(() => {
-                if (isRunning) {
+                if (isRunning && isArmed) {
                     lastFrameData = ctx.getImageData(0, 0, canvas.width, canvas.height);
                     animationFrameId = requestAnimationFrame(detectMotion);
                 }
@@ -356,19 +376,19 @@
         }
 
         function triggerAlarm() {
-            log("🚨 זוהתה תנועה! מפעיל צעקה עוצמתית!");
+            log("🚨 זוהתה תנועה! מפעיל צעקה איטית ועוצמתית!");
             
             const textToSpeak = document.getElementById('trapText').value || "זהירות! תתרחק מפה!";
             
             if ('speechSynthesis' in window) {
                 window.speechSynthesis.cancel();
 
-                // הפעלה כפולה ברצף (פי שלוש עוצמה ואפקט נוכחות בשטח)
+                // הפעלה כפולה בקצב איטי מאוד ובטון נמוך ומפחיד
                 for (let i = 0; i < 2; i++) {
                     const utterance = new SpeechSynthesisUtterance(textToSpeak);
                     utterance.lang = 'he-IL';
-                    utterance.rate = 1.25; // מהיר יותר ואגרסיבי
-                    utterance.pitch = 0.6; // טון נמוך, עמוק ומפחיד בטירוף
+                    utterance.rate = 0.75; // איטי במיוחד
+                    utterance.pitch = 0.5; // טון נמוך ומאיים בטירוף
                     utterance.volume = 1.0; // מקסימלי
                     window.speechSynthesis.speak(utterance);
                 }
@@ -383,11 +403,11 @@
                 window.speechSynthesis.cancel();
                 const utterance = new SpeechSynthesisUtterance(textToSpeak);
                 utterance.lang = 'he-IL';
-                utterance.rate = 1.2;
-                utterance.pitch = 0.6;
+                utterance.rate = 0.75;
+                utterance.pitch = 0.5;
                 utterance.volume = 1.0;
                 window.speechSynthesis.speak(utterance);
-                log("בוצעה בדיקת קול עוצמתית.");
+                log("בוצעה בדיקת קול איטית ועוצמתית.");
             } else {
                 alert("אין תמיכה בדיבור בדפדפן זה.");
             }
