@@ -236,12 +236,13 @@
         const cameraBox = document.getElementById('cameraBox');
 
         let isRunning = false;
-        let isArmed = false; // מצב דריכה מלאה אחרי הדיליי
+        let isArmed = false;
         let lastFrameData = null;
         let animationFrameId = null;
         let lastTriggerTime = 0;
         let stream = null;
         let countdownTimer = null;
+        let recognition = null;
 
         function log(msg) {
             logBox.innerHTML = `> ${msg}<br>` + logBox.innerHTML;
@@ -257,6 +258,7 @@
                         window.speechSynthesis.speak(dummy);
                     }
 
+                    // הפעלת מצלמה (ללא סאונד במיקרופון של הווידאו כדי למנוע פידבק)
                     stream = await navigator.mediaDevices.getUserMedia({ 
                         video: { facingMode: 'environment', width: 320, height: 240 }, 
                         audio: false 
@@ -264,6 +266,9 @@
                     video.srcObject = stream;
                     await video.play();
                     
+                    // הפעלת זיהוי קול (Speech Recognition) ברקע
+                    setupVoiceRecognition();
+
                     isRunning = true;
                     isArmed = false;
                     toggleBtn.innerText = "עצור מלכודת";
@@ -273,7 +278,7 @@
                     canvas.height = 120;
                     lastFrameData = null;
                     
-                    // דיליי של 7 שניות לפני שהמלכודת נדרכת בפועל
+                    // דיליי של 7 שניות דריכה
                     let timeLeft = 7;
                     statusText.innerText = `התרחק מהשטח (${timeLeft})...`;
                     log(`הפעלת טיימר: המלכודת תדרוך בעוד ${timeLeft} שניות.`);
@@ -286,8 +291,8 @@
                             clearInterval(countdownTimer);
                             isArmed = true;
                             statusDot.classList.add('active');
-                            statusText.innerText = "המלכודת דרוכה בשטח!";
-                            log("הצלחה: המלכודת דרוכה וממתינה לתנועה.");
+                            statusText.innerText = "המלכודת דרוכה (תנועה + קול)";
+                            log("הצלחה: המלכודת דרוכה ומאזינה בשטח.");
                             detectMotion();
                         }
                     }, 1000);
@@ -301,10 +306,64 @@
             }
         }
 
+        function setupVoiceRecognition() {
+            const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+            if (SpeechRecognition) {
+                recognition = new SpeechRecognition();
+                recognition.lang = 'he-IL';
+                recognition.continuous = true;
+                recognition.interimResults = false;
+
+                recognition.onresult = (event) => {
+                    if (!isArmed) return;
+                    const transcript = event.results[event.results.length - 1][0].transcript.toLowerCase();
+                    log(`שמעתי: "${transcript}"`);
+
+                    // בדיקה האם נאמר "חשין שחור" (גם עם שגיאות כתיב קלות או מילים דומות)
+                    if (transcript.includes('חשין שחור') || transcript.includes('חישין שחור') || transcript.includes('חשין')) {
+                        const now = Date.now();
+                        if (now - lastTriggerTime > 4000) {
+                            lastTriggerTime = now;
+                            log("🎙️ זיהוי קולי: נאמר 'חשין שחור'!");
+                            cameraBox.classList.add('motion-detected');
+                            setTimeout(() => cameraBox.classList.remove('motion-detected'), 1000);
+                            triggerAlarm();
+                        }
+                    }
+                };
+
+                recognition.onerror = (event) => {
+                    // התעלמות משגיאות שקט אוטומטיות והפעלה מחדש אם המערכת רצה
+                    if (isRunning && event.error === 'no-speech') {
+                        try { recognition.start(); } catch(e){}
+                    }
+                };
+
+                recognition.onend = () => {
+                    // שמירה על האזנה רציפה כל עוד המלכודת פעילה
+                    if (isRunning) {
+                        try { recognition.start(); } catch(e){}
+                    }
+                };
+
+                try {
+                    recognition.start();
+                    log("מיקרופון מואזן: מחכה לקוד 'חשין שחור'...");
+                } catch(e) {
+                    log("שגיאה בהפעלת זיהוי קולי.");
+                }
+            } else {
+                log("הערה: דפדפן זה אינו תומך בזיהוי קולי (SpeechRecognition). עובד רק לפי מצלמה.");
+            }
+        }
+
         function stopSystem() {
             isRunning = false;
             isArmed = false;
             if (countdownTimer) clearInterval(countdownTimer);
+            if (recognition) {
+                try { recognition.stop(); } catch(e){}
+            }
             if (stream) {
                 stream.getTracks().forEach(track => track.stop());
                 stream = null;
@@ -376,19 +435,18 @@
         }
 
         function triggerAlarm() {
-            log("🚨 זוהתה תנועה! מפעיל צעקה איטית ועוצמתית!");
+            log("🚨 מפעיל צעקה איטית ועוצמתית!");
             
             const textToSpeak = document.getElementById('trapText').value || "זהירות! תתרחק מפה!";
             
             if ('speechSynthesis' in window) {
                 window.speechSynthesis.cancel();
 
-                // הפעלה כפולה בקצב איטי מאוד ובטון נמוך ומפחיד
                 for (let i = 0; i < 2; i++) {
                     const utterance = new SpeechSynthesisUtterance(textToSpeak);
                     utterance.lang = 'he-IL';
                     utterance.rate = 0.75; // איטי במיוחד
-                    utterance.pitch = 0.5; // טון נמוך ומאיים בטירוף
+                    utterance.pitch = 0.5; // טון נמוך ומאיים
                     utterance.volume = 1.0; // מקסימלי
                     window.speechSynthesis.speak(utterance);
                 }
