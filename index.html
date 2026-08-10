@@ -117,19 +117,22 @@
             color: var(--text-secondary);
         }
 
-        textarea {
+        textarea, input[type="text"] {
             width: 100%;
-            height: 80px;
             background: #0f172a;
             border: 1px solid #334155;
             border-radius: 8px;
             color: var(--text);
             padding: 10px;
             font-size: 1rem;
+        }
+
+        textarea {
+            height: 70px;
             resize: none;
         }
 
-        textarea:focus {
+        input[type="text"]:focus, textarea:focus {
             outline: none;
             border-color: var(--accent);
         }
@@ -211,7 +214,10 @@
         </div>
 
         <div class="card">
-            <label for="trapText">מה הצעקה/הדיבור שהמלכודת תגיד?</label>
+            <label for="triggerWord">מילת הקוד לזיהוי במיקרופון:</label>
+            <input type="text" id="triggerWord" value="די">
+
+            <label for="trapText">מה הצעקה שהמלכודת תגיד?</label>
             <textarea id="trapText">מי שם?! תעוף מפה מיד!</textarea>
             
             <div class="slider-group">
@@ -221,7 +227,7 @@
         </div>
 
         <div class="log-box" id="logBox">
-            > מערכת מוכנה. אמר "די" כדי להפעיל.
+            > מערכת מוכנה. קבע מילת קוד ולחץ הפעלה.
         </div>
     </div>
 
@@ -291,8 +297,9 @@
                             clearInterval(countdownTimer);
                             isArmed = true;
                             statusDot.classList.add('active');
-                            statusText.innerText = "המלכודת דרוכה (מחכה לקוד 'די')";
-                            log("הצלחה: המלכודת דרוכה ומאזינה בשטח.");
+                            const customWord = document.getElementById('triggerWord').value;
+                            statusText.innerText = `דרוכה (מחכה ל-'${customWord}')`;
+                            log(`הצלחה: המלכודת דרוכה ומאזינה למילה "${customWord}".`);
                             detectMotion();
                         }
                     }, 1000);
@@ -310,8 +317,7 @@
             const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
             if (SpeechRecognition) {
                 recognition = new SpeechRecognition();
-                // החזרה לעברית כדי לזהות את המילה "די" בצורה מושלמת
-                recognition.lang = 'he-IL'; 
+                recognition.lang = 'he-IL'; // תומך בעברית, ואם תקליד אנגלית אפשר לשנות אוטומטית לפי הצורך
                 recognition.continuous = true;
                 recognition.interimResults = true;
 
@@ -325,12 +331,13 @@
                     transcript = transcript.toLowerCase().trim();
                     log(`שמעתי: "${transcript}"`);
 
-                    // בדיקה האם נאמרה המילה "די" או "דיי"
-                    if (transcript.includes('די') || transcript.includes('דיי')) {
+                    const targetWord = document.getElementById('triggerWord').value.toLowerCase().trim();
+
+                    if (targetWord && transcript.includes(targetWord)) {
                         const now = Date.now();
                         if (now - lastTriggerTime > 4000) {
                             lastTriggerTime = now;
-                            log("🎙️ זיהוי קולי: זוהה הקוד 'די'!");
+                            log(`🎙️ זיהוי קולי: זוהתה המילה "${targetWord}"!`);
                             cameraBox.classList.add('motion-detected');
                             setTimeout(() => cameraBox.classList.remove('motion-detected'), 1000);
                             triggerAlarm();
@@ -352,7 +359,8 @@
 
                 try {
                     recognition.start();
-                    log("מיקרופון מואזן: מחכה ל-'די'...");
+                    const targetWord = document.getElementById('triggerWord').value;
+                    log(`מיקרופון מואזן: מחכה ל-'${targetWord}'...`);
                 } catch(e) {
                     log("שגיאה בהפעלת זיהוי קולי.");
                 }
