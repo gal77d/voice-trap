@@ -1,1 +1,362 @@
-# voice-trap
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Voice Trap - מלכודת קולית</title>
+    <style>
+        :root {
+            --bg-color: #0f172a;
+            --card-bg: #1e293b;
+            --accent: #22c55e;
+            --accent-hover: #16a34a;
+            --danger: #ef4444;
+            --text: #f8fafc;
+            --text-secondary: #94a3b8;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: system-ui, -apple-system, sans-serif;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 16px;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 480px;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        h1 {
+            font-size: 1.5rem;
+            text-align: center;
+            margin-bottom: 4px;
+        }
+
+        .card {
+            background-color: var(--card-bg);
+            border-radius: 12px;
+            padding: 16px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .camera-container {
+            position: relative;
+            width: 100%;
+            height: 220px;
+            background: #000;
+            border-radius: 8px;
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        video, canvas {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        canvas {
+            display: none; /* רץ ברקע */
+        }
+
+        .status-badge {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 4px 10px;
+            border-radius: 20px;
+            font-size: 0.85rem;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            z-index: 10;
+        }
+
+        .dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: var(--danger);
+        }
+
+        .dot.active {
+            background: var(--accent);
+            box-shadow: 0 0 8px var(--accent);
+        }
+
+        label {
+            font-size: 0.9rem;
+            color: var(--text-secondary);
+        }
+
+        textarea {
+            width: 100%;
+            height: 80px;
+            background: #0f172a;
+            border: 1px solid #334155;
+            border-radius: 8px;
+            color: var(--text);
+            padding: 10px;
+            font-size: 1rem;
+            resize: none;
+        }
+
+        textarea:focus {
+            outline: none;
+            border-color: var(--accent);
+        }
+
+        .controls-row {
+            display: flex;
+            gap: 10px;
+        }
+
+        button {
+            flex: 1;
+            background-color: var(--accent);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            padding: 12px;
+            font-size: 1rem;
+            font-weight: bold;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        button:active {
+            transform: scale(0.98);
+        }
+
+        button.stop {
+            background-color: var(--danger);
+        }
+
+        .slider-group {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        input[type="range"] {
+            width: 100%;
+            accent-color: var(--accent);
+        }
+
+        .log-box {
+            background: #0f172a;
+            border-radius: 8px;
+            padding: 8px 12px;
+            font-family: monospace;
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+            height: 60px;
+            overflow-y: auto;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <h1>voice-trap 🚨</h1>
+        
+        <!-- אזור מצלמה -->
+        <div class="card">
+            <div class="camera-container">
+                <div class="status-badge">
+                    <div id="statusDot" class="dot"></div>
+                    <span id="statusText">ממתין להפעלה</span>
+                </div>
+                <video id="webcam" autoplay playsinline muted></video>
+                <canvas id="canvasOutput"></canvas>
+            </div>
+            <div class="controls-row">
+                <button id="toggleBtn" onclick="toggleSystem()">הפעל מלכודת</button>
+                <button onclick="testSpeech()" style="background: #3b82f6;">בדיקת קול</button>
+            </div>
+        </div>
+
+        <!-- הגדרות תוכן הקול -->
+        <div class="card">
+            <label for="trapText">מה הצעקה/הדיבור שהמלכודת תגיד?</label>
+            <textarea id="trapText">מי שם?! תעוף מפה מיד!</textarea>
+            
+            <div class="slider-group">
+                <label>רגישות תנועה (<span id="sensVal">15</span>)</label>
+                <input type="range" id="sensitivity" min="5" max="40" value="15" oninput="document.getElementById('sensVal').innerText = this.value">
+            </div>
+        </div>
+
+        <!-- לוג מערכת -->
+        <div class="log-box" id="logBox">
+            > מערכת מוכנה. לחץ על הפעל מלכודת.
+        </div>
+    </div>
+
+    <script>
+        const video = document.getElementById('webcam');
+        const canvas = document.getElementById('canvasOutput');
+        const ctx = canvas.getContext('2d', { willReadFrequently: true });
+        const statusDot = document.getElementById('statusDot');
+        const statusText = document.getElementById('statusText');
+        const toggleBtn = document.getElementById('toggleBtn');
+        const logBox = document.getElementById('logBox');
+
+        let isRunning = false;
+        let lastFrameData = null;
+        let animationFrameId = null;
+        let lastTriggerTime = 0;
+        let stream = null;
+
+        function log(msg) {
+            logBox.innerHTML = `> ${msg}<br>` + logBox.innerHTML;
+        }
+
+        async function toggleSystem() {
+            if (!isRunning) {
+                try {
+                    stream = await navigator.mediaDevices.getUserMedia({ 
+                        video: { facingMode: 'environment', width: 320, height: 240 }, 
+                        audio: false 
+                    });
+                    video.srcObject = stream;
+                    await video.play();
+                    
+                    isRunning = true;
+                    toggleBtn.innerText = "עצר מלכודת";
+                    toggleBtn.classList.add('stop');
+                    statusDot.classList.add('active');
+                    statusText.innerText = "המלכודת דרוכה!";
+                    log("הצלחה: המצלמה הופעלה, המלכודת דרוכה בשטח.");
+                    
+                    // אתחול רזולוציית קנבס
+                    canvas.width = 160;
+                    canvas.height = 120;
+                    
+                    detectMotion();
+                } catch (err) {
+                    log("שגיאה בהפעלת מצלמה: " + err.message);
+                    alert("ודא שהרשאת המצלמה מאושרת בדפדפן.");
+                }
+            } else {
+                stopSystem();
+            }
+        }
+
+        function stopSystem() {
+            isRunning = false;
+            if (stream) {
+                stream.getTracks().forEach(track => track.stop());
+                stream = null;
+            }
+            if (animationFrameId) {
+                cancelAnimationFrame(animationFrameId);
+            }
+            video.srcObject = null;
+            toggleBtn.innerText = "הפעל מלכודת";
+            toggleBtn.classList.remove('stop');
+            statusDot.classList.remove('active');
+            statusText.innerText = "ממתין להפעלה";
+            log("המלכודת כובתה.");
+        }
+
+        function detectMotion() {
+            if (!isRunning) return;
+
+            // ציור הפריים הנוכחי לקנבס מוקטן כדי לעבד מהר
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+            const currentFrame = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            const data = currentFrame.data;
+
+            if (lastFrameData) {
+                let diffCount = 0;
+                const threshold = parseInt(document.getElementById('sensitivity').value);
+                
+                // בדיקת שינויים בין פיקסלים (דגימה כל 4 פיקסלים לחיסכון בעומס)
+                for (let i = 0; i < data.length; i += 16) {
+                    const rDiff = Math.abs(data[i] - lastFrameData.data[i]);
+                    const gDiff = Math.abs(data[i+1] - lastFrameData.data[i+1]);
+                    const bDiff = Math.abs(data[i+2] - lastFrameData.data[i+2]);
+
+                    if ((rDiff + gDiff + bDiff) / 3 > 40) {
+                        diffCount++;
+                    }
+                }
+
+                // סף זיהוי תנועה
+                if (diffCount > threshold * 3) {
+                    const now = Date.now();
+                    // מניעת הפעלה כפולה רצופה (Cooldown של 3 שניות)
+                    if (now - lastTriggerTime > 3000) {
+                        lastTriggerTime = now;
+                        triggerAlarm();
+                    }
+                }
+            }
+
+            lastFrameData = currentFrame;
+            animationFrameId = requestAnimationFrame(detectMotion);
+        }
+
+        function triggerAlarm() {
+            log("🚨 זיהוי תנועה בשטח! הפעלת צעקה קולית!");
+            
+            const textToSpeak = document.getElementById('trapText').value || "זהירות! תתרחק מפה!";
+            
+            if ('speechSynthesis' in window) {
+                // עצירת דיבור קודם אם רץ
+                window.speechSynthesis.cancel();
+
+                // צעקה כפולה לווליום ואפקט מקסימלי
+                for (let i = 0; i < 2; i++) {
+                    const utterance = new SpeechSynthesisUtterance(textToSpeak);
+                    utterance.lang = 'he-IL';
+                    utterance.rate = 1.1; // קצת מהיר ותקיף יותר
+                    utterance.pitch = 0.9; // טון נמוך ומאיים יותר
+                    utterance.volume = 1.0; // מקסימלי
+                    window.speechSynthesis.speak(utterance);
+                }
+            } else {
+                log("שגיאה: הדפדפן אינו תומך ב-SpeechSynthesis.");
+            }
+        }
+
+        function testSpeech() {
+            const textToSpeak = document.getElementById('trapText').value || "בדיקת קול.";
+            if ('speechSynthesis' in window) {
+                window.speechSynthesis.cancel();
+                const utterance = new SpeechSynthesisUtterance(textToSpeak);
+                utterance.lang = 'he-IL';
+                utterance.rate = 1.0;
+                utterance.pitch = 1.0;
+                utterance.volume = 1.0;
+                window.speechSynthesis.speak(utterance);
+                log("בוצעה בדיקת קול ידנית.");
+            } else {
+                alert("אין תמיכה בדיבור בדפדפן זה.");
+            }
+        }
+    </script>
+</body>
+</html>
