@@ -258,15 +258,19 @@
                         window.speechSynthesis.speak(dummy);
                     }
 
-                    // הפעלת מצלמה (ללא סאונד במיקרופון של הווידאו כדי למנוע פידבק)
+                    // בקשת הרשאה למצלמה וגם למיקרופון יחד כדי לאפשר זיהוי דיבור תקין בנייד
                     stream = await navigator.mediaDevices.getUserMedia({ 
                         video: { facingMode: 'environment', width: 320, height: 240 }, 
-                        audio: false 
+                        audio: true 
                     });
+                    
+                    // שתיקת הזרמת שמע מקומית כדי שלא יהיה פידבק מהרמקול למיקרופון
+                    stream.getAudioTracks().forEach(track => track.enabled = false);
+
                     video.srcObject = stream;
                     await video.play();
                     
-                    // הפעלת זיהוי קול (Speech Recognition) ברקע
+                    // הפעלת זיהוי קול
                     setupVoiceRecognition();
 
                     isRunning = true;
@@ -298,8 +302,8 @@
                     }, 1000);
 
                 } catch (err) {
-                    log("שגיאה בהפעלת מצלמה: " + err.message);
-                    alert("ודא שהרשאת המצלמה מאושרת בדפדפן.");
+                    log("שגיאה בהפעלת אמצעים: " + err.message);
+                    alert("ודא שהרשאת המצלמה והמיקרופון מאושרות בדפדפן.");
                 }
             } else {
                 stopSystem();
@@ -312,19 +316,24 @@
                 recognition = new SpeechRecognition();
                 recognition.lang = 'he-IL';
                 recognition.continuous = true;
-                recognition.interimResults = false;
+                recognition.interimResults = true; // מעקב בזמן אמת אחרי מילים
 
                 recognition.onresult = (event) => {
                     if (!isArmed) return;
-                    const transcript = event.results[event.results.length - 1][0].transcript.toLowerCase();
+                    
+                    let transcript = '';
+                    for (let i = event.resultIndex; i < event.results.length; ++i) {
+                        transcript += event.results[i][0].transcript;
+                    }
+                    transcript = transcript.toLowerCase();
                     log(`שמעתי: "${transcript}"`);
 
-                    // בדיקה האם נאמר "חשין שחור" (גם עם שגיאות כתיב קלות או מילים דומות)
-                    if (transcript.includes('חשין שחור') || transcript.includes('חישין שחור') || transcript.includes('חשין')) {
+                    // בדיקה האם נאמר "חשין שחור" או "חישין שחור"
+                    if (transcript.includes('חשין שחור') || transcript.includes('חישין שחור') || (transcript.includes('חשין') && transcript.includes('שחור'))) {
                         const now = Date.now();
                         if (now - lastTriggerTime > 4000) {
                             lastTriggerTime = now;
-                            log("🎙️ זיהוי קולי: נאמר 'חשין שחור'!");
+                            log("🎙️ זיהוי קולי: זוהה הקוד 'חשין שחור'!");
                             cameraBox.classList.add('motion-detected');
                             setTimeout(() => cameraBox.classList.remove('motion-detected'), 1000);
                             triggerAlarm();
@@ -333,14 +342,12 @@
                 };
 
                 recognition.onerror = (event) => {
-                    // התעלמות משגיאות שקט אוטומטיות והפעלה מחדש אם המערכת רצה
-                    if (isRunning && event.error === 'no-speech') {
+                    if (isRunning && (event.error === 'no-speech' || event.error === 'aborted')) {
                         try { recognition.start(); } catch(e){}
                     }
                 };
 
                 recognition.onend = () => {
-                    // שמירה על האזנה רציפה כל עוד המלכודת פעילה
                     if (isRunning) {
                         try { recognition.start(); } catch(e){}
                     }
@@ -353,7 +360,7 @@
                     log("שגיאה בהפעלת זיהוי קולי.");
                 }
             } else {
-                log("הערה: דפדפן זה אינו תומך בזיהוי קולי (SpeechRecognition). עובד רק לפי מצלמה.");
+                log("הערה: הדפדפן הנוכחי שלך אינו תומך בזיהוי קולי (מומלץ להשתמש ב-Chrome בנייד).");
             }
         }
 
@@ -445,9 +452,9 @@
                 for (let i = 0; i < 2; i++) {
                     const utterance = new SpeechSynthesisUtterance(textToSpeak);
                     utterance.lang = 'he-IL';
-                    utterance.rate = 0.75; // איטי במיוחד
-                    utterance.pitch = 0.5; // טון נמוך ומאיים
-                    utterance.volume = 1.0; // מקסימלי
+                    utterance.rate = 0.75;
+                    utterance.pitch = 0.5;
+                    utterance.volume = 1.0;
                     window.speechSynthesis.speak(utterance);
                 }
             } else {
