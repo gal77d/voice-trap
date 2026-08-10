@@ -11,6 +11,7 @@
             --accent: #22c55e;
             --accent-hover: #16a34a;
             --danger: #ef4444;
+            --warning: #f59e0b;
             --text: #f8fafc;
             --text-secondary: #94a3b8;
         }
@@ -145,7 +146,7 @@
             border: none;
             border-radius: 8px;
             padding: 12px;
-            font-size: 1rem;
+            font-size: 0.95rem;
             font-weight: bold;
             cursor: pointer;
             transition: background 0.2s;
@@ -157,6 +158,10 @@
 
         button.stop {
             background-color: var(--danger);
+        }
+
+        button.silence {
+            background-color: var(--warning);
         }
 
         .slider-group {
@@ -200,6 +205,9 @@
                 <button id="toggleBtn" onclick="toggleSystem()">הפעל מלכודת</button>
                 <button onclick="testSpeech()" style="background: #3b82f6;">בדיקת קול</button>
             </div>
+            <div class="controls-row">
+                <button class="silence" onclick="stopAudioOnly()">שקט / עצור קול 🔇</button>
+            </div>
         </div>
 
         <div class="card">
@@ -240,7 +248,6 @@
         async function toggleSystem() {
             if (!isRunning) {
                 try {
-                    // פתיחת מנגנון הסאונד של הדפדפן דרך אירוע לחיצה (משחרר חסימה)
                     if ('speechSynthesis' in window) {
                         window.speechSynthesis.cancel();
                         const dummy = new SpeechSynthesisUtterance(" ");
@@ -260,7 +267,7 @@
                     toggleBtn.classList.add('stop');
                     statusDot.classList.add('active');
                     statusText.innerText = "המלכודת דרוכה בשטח!";
-                    log("הצלחה: המצלמה והקול משוחררים לפעולה.");
+                    log("הצלחה: המצלמה פעילה והמערכת דרוכה.");
                     
                     canvas.width = 160;
                     canvas.height = 120;
@@ -291,7 +298,18 @@
             statusDot.classList.remove('active');
             statusText.innerText = "ממתין להפעלה";
             cameraBox.classList.remove('motion-detected');
+            
+            if ('speechSynthesis' in window) {
+                window.speechSynthesis.cancel();
+            }
             log("המלכודת כובתה.");
+        }
+
+        function stopAudioOnly() {
+            if ('speechSynthesis' in window) {
+                window.speechSynthesis.cancel();
+                log("הקול הושתק ידנית.");
+            }
         }
 
         function detectMotion() {
@@ -338,20 +356,22 @@
         }
 
         function triggerAlarm() {
-            log("🚨 זוהתה תנועה! מפעיל צעקה!");
+            log("🚨 זוהתה תנועה! מפעיל צעקה עוצמתית!");
             
             const textToSpeak = document.getElementById('trapText').value || "זהירות! תתרחק מפה!";
             
             if ('speechSynthesis' in window) {
                 window.speechSynthesis.cancel();
-                
-                const utterance = new SpeechSynthesisUtterance(textToSpeak);
-                utterance.lang = 'he-IL';
-                utterance.rate = 1.2;
-                utterance.pitch = 0.7; // טון נמוך, מאיים ועוצמתי
-                utterance.volume = 1.0;
-                
-                window.speechSynthesis.speak(utterance);
+
+                // הפעלה כפולה ברצף (פי שלוש עוצמה ואפקט נוכחות בשטח)
+                for (let i = 0; i < 2; i++) {
+                    const utterance = new SpeechSynthesisUtterance(textToSpeak);
+                    utterance.lang = 'he-IL';
+                    utterance.rate = 1.25; // מהיר יותר ואגרסיבי
+                    utterance.pitch = 0.6; // טון נמוך, עמוק ומפחיד בטירוף
+                    utterance.volume = 1.0; // מקסימלי
+                    window.speechSynthesis.speak(utterance);
+                }
             } else {
                 log("שגיאה: אין תמיכה בדיבור בדפדפן.");
             }
@@ -363,11 +383,11 @@
                 window.speechSynthesis.cancel();
                 const utterance = new SpeechSynthesisUtterance(textToSpeak);
                 utterance.lang = 'he-IL';
-                utterance.rate = 1.0;
-                utterance.pitch = 1.0;
+                utterance.rate = 1.2;
+                utterance.pitch = 0.6;
                 utterance.volume = 1.0;
                 window.speechSynthesis.speak(utterance);
-                log("בוצעה בדיקת קול ידנית.");
+                log("בוצעה בדיקת קול עוצמתית.");
             } else {
                 alert("אין תמיכה בדיבור בדפדפן זה.");
             }
