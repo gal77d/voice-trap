@@ -317,7 +317,7 @@
             const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
             if (SpeechRecognition) {
                 recognition = new SpeechRecognition();
-                recognition.lang = 'he-IL'; // תומך בעברית, ואם תקליד אנגלית אפשר לשנות אוטומטית לפי הצורך
+                recognition.lang = 'he-IL'; 
                 recognition.continuous = true;
                 recognition.interimResults = true;
 
@@ -447,21 +447,19 @@
         }
 
         function triggerAlarm() {
-            log("🚨 מפעיל צעקה איטית ועוצמתית!");
+            log("🚨 מפעיל צעקת חירום עוצמתית!");
             
             const textToSpeak = document.getElementById('trapText').value || "זהירות! תתרחק מפה!";
             
             if ('speechSynthesis' in window) {
                 window.speechSynthesis.cancel();
 
-                for (let i = 0; i < 2; i++) {
-                    const utterance = new SpeechSynthesisUtterance(textToSpeak);
-                    utterance.lang = 'he-IL';
-                    utterance.rate = 0.75;
-                    utterance.pitch = 0.5;
-                    utterance.volume = 1.0;
-                    window.speechSynthesis.speak(utterance);
-                }
+                const utterance = new SpeechSynthesisUtterance(textToSpeak);
+                utterance.lang = 'he-IL';
+                utterance.rate = 0.6; // איטי מאד, בולט ומאיים
+                utterance.pitch = 0.3; // טון עמוק ומפחיד
+                utterance.volume = 1.0; // מקסימלי
+                window.speechSynthesis.speak(utterance);
             } else {
                 log("שגיאה: אין תמיכה בדיבור בדפדפן.");
             }
@@ -473,11 +471,11 @@
                 window.speechSynthesis.cancel();
                 const utterance = new SpeechSynthesisUtterance(textToSpeak);
                 utterance.lang = 'he-IL';
-                utterance.rate = 0.75;
-                utterance.pitch = 0.5;
+                utterance.rate = 0.6;
+                utterance.pitch = 0.3;
                 utterance.volume = 1.0;
                 window.speechSynthesis.speak(utterance);
-                log("בוצעה בדיקת קול איטית ועוצמתית.");
+                log("בוצעה בדיקת קול עוצמתית.");
             } else {
                 alert("אין תמיכה בדיבור בדפדפן זה.");
             }
