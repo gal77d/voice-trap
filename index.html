@@ -221,7 +221,7 @@
         </div>
 
         <div class="log-box" id="logBox">
-            > מערכת מוכנה. הצב את הטלפון מול השטח ולחץ הפעלה.
+            > מערכת מוכנה. אמר "liam is black" כדי להפעיל.
         </div>
     </div>
 
@@ -258,19 +258,16 @@
                         window.speechSynthesis.speak(dummy);
                     }
 
-                    // בקשת הרשאה למצלמה וגם למיקרופון יחד כדי לאפשר זיהוי דיבור תקין בנייד
                     stream = await navigator.mediaDevices.getUserMedia({ 
                         video: { facingMode: 'environment', width: 320, height: 240 }, 
                         audio: true 
                     });
                     
-                    // שתיקת הזרמת שמע מקומית כדי שלא יהיה פידבק מהרמקול למיקרופון
                     stream.getAudioTracks().forEach(track => track.enabled = false);
 
                     video.srcObject = stream;
                     await video.play();
                     
-                    // הפעלת זיהוי קול
                     setupVoiceRecognition();
 
                     isRunning = true;
@@ -282,7 +279,6 @@
                     canvas.height = 120;
                     lastFrameData = null;
                     
-                    // דיליי של 7 שניות דריכה
                     let timeLeft = 7;
                     statusText.innerText = `התרחק מהשטח (${timeLeft})...`;
                     log(`הפעלת טיימר: המלכודת תדרוך בעוד ${timeLeft} שניות.`);
@@ -295,7 +291,7 @@
                             clearInterval(countdownTimer);
                             isArmed = true;
                             statusDot.classList.add('active');
-                            statusText.innerText = "המלכודת דרוכה (תנועה + קול)";
+                            statusText.innerText = "המלכודת דרוכה (מחכה לקוד)";
                             log("הצלחה: המלכודת דרוכה ומאזינה בשטח.");
                             detectMotion();
                         }
@@ -314,9 +310,10 @@
             const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
             if (SpeechRecognition) {
                 recognition = new SpeechRecognition();
-                recognition.lang = 'he-IL';
+                // הגדרה לשפה אנגלית כדי לזהות בצורה מושלמת את המשפט
+                recognition.lang = 'en-US'; 
                 recognition.continuous = true;
-                recognition.interimResults = true; // מעקב בזמן אמת אחרי מילים
+                recognition.interimResults = true;
 
                 recognition.onresult = (event) => {
                     if (!isArmed) return;
@@ -328,12 +325,12 @@
                     transcript = transcript.toLowerCase();
                     log(`שמעתי: "${transcript}"`);
 
-                    // בדיקה האם נאמר "חשין שחור" או "חישין שחור"
-                    if (transcript.includes('חשין שחור') || transcript.includes('חישין שחור') || (transcript.includes('חשין') && transcript.includes('שחור'))) {
+                    // בדיקה האם נאמר הקוד באנגלית
+                    if (transcript.includes('liam is black') || (transcript.includes('liam') && transcript.includes('black'))) {
                         const now = Date.now();
                         if (now - lastTriggerTime > 4000) {
                             lastTriggerTime = now;
-                            log("🎙️ זיהוי קולי: זוהה הקוד 'חשין שחור'!");
+                            log("🎙️ זיהוי קולי: זוהה הקוד הנכון!");
                             cameraBox.classList.add('motion-detected');
                             setTimeout(() => cameraBox.classList.remove('motion-detected'), 1000);
                             triggerAlarm();
@@ -355,12 +352,12 @@
 
                 try {
                     recognition.start();
-                    log("מיקרופון מואזן: מחכה לקוד 'חשין שחור'...");
+                    log("מיקרופון מואזן: מחכה ל-'liam is black'...");
                 } catch(e) {
                     log("שגיאה בהפעלת זיהוי קולי.");
                 }
             } else {
-                log("הערה: הדפדפן הנוכחי שלך אינו תומך בזיהוי קולי (מומלץ להשתמש ב-Chrome בנייד).");
+                log("הערה: הדפדפן הנוכחי אינו תומך בזיהוי קולי.");
             }
         }
 
