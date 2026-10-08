@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#3949ab">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="הכתב שלי">
+  <title>הכתב שלי – כתב יד לפונט</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E✍️%3C/text%3E%3C/svg%3E">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <header class="topbar">
+    <h1>✍️ הכתב שלי</h1>
+    <span id="glyph-count" class="pill"></span>
+  </header>
+
+  <main>
+    <!-- ============ Screen 1: template ============ -->
+    <section id="screen-template" class="screen" data-screen="template">
+      <div class="card">
+        <h2>שלב 1 · התבנית</h2>
+        <ol class="steps">
+          <li>הורידו את התבנית (PDF) והדפיסו אותה בגודל מלא (100%).</li>
+          <li>כתבו כל תו במשבצת שלו – התו הקטן והאפור בפינה אומר מה לכתוב.</li>
+          <li>אין מדפסת? ציירו על דף רגיל רשת של 8 עמודות × 10 שורות באותו סדר, ובפינות 4 ריבועים שחורים מלאים.</li>
+        </ol>
+        <div class="btn-col">
+          <button id="btn-template-pdf" class="btn primary">📄 הורדת התבנית (PDF)</button>
+          <button id="btn-template-print" class="btn">🖨️ הדפסה</button>
+          <button id="btn-template-png" class="btn">🖼️ הורדה כתמונה</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>טיפים לתוצאה טובה</h3>
+        <ul class="tips">
+          <li>עט כהה (שחור/כחול כהה), לא עיפרון.</li>
+          <li>כתבו בגודל טבעי, באמצע המשבצת, בלי לגעת בקווים.</li>
+          <li>הקווים הקטנים בצדי כל משבצת הם „קו השורה" – הניחו עליהם את תחתית האות. אותיות כמו ק, ן, ך, p, g, y יורדות מתחתיו.</li>
+          <li>אל תכסו את הריבועים השחורים בפינות.</li>
+        </ul>
+      </div>
+
+      <div class="card preview-card">
+        <img id="template-preview" alt="תצוגה מקדימה של התבנית">
+      </div>
+
+      <button class="btn primary big" data-goto="scan">הבא: צילום הדף ←</button>
+    </section>
+
+    <!-- ============ Screen 2: scan ============ -->
+    <section id="screen-scan" class="screen" data-screen="scan">
+      <div class="card">
+        <h2>שלב 2 · צילום הדף</h2>
+        <p class="hint">צלמו מלמעלה, באור טוב ובלי צל, כשכל הדף כולל 4 הריבועים השחורים בתוך התמונה. התמונה נשארת בטלפון ולא נשלחת לשום מקום.</p>
+        <div class="btn-col">
+          <label class="btn primary">📷 צילום הדף
+            <input type="file" accept="image/*" capture="environment" id="input-camera" hidden>
+          </label>
+          <label class="btn">🖼️ בחירת תמונה מהגלריה
+            <input type="file" accept="image/*" id="input-gallery" hidden>
+          </label>
+        </div>
+      </div>
+
+      <div class="card" id="align-card" hidden>
+        <h3>יישור הדף</h3>
+        <p class="hint" id="align-status"></p>
+        <div class="editor-wrap"><canvas id="corner-canvas"></canvas></div>
+        <p class="hint">גררו את 4 העיגולים הכתומים לפינות הרשת (לא לריבועים השחורים). הקווים הכחולים צריכים לשבת על קווי הרשת.</p>
+        <div class="btn-row">
+          <button id="btn-detect" class="btn">🔍 זיהוי אוטומטי</button>
+          <button id="btn-rotate" class="btn">↻ סיבוב</button>
+        </div>
+        <button id="btn-extract" class="btn primary big">✂️ חיתוך האותיות</button>
+      </div>
+
+      <div class="card" id="result-card" hidden>
+        <h3>האותיות שנמצאו</h3>
+        <p class="hint" id="result-status"></p>
+        <label class="field">
+          <span>רגישות לדיו <output id="sensitivity-out">50</output></span>
+          <input type="range" id="sensitivity" min="0" max="100" value="50">
+        </label>
+        <p class="hint">יותר מדי לכלוך? הורידו את הרגישות. קווים חסרים? העלו אותה. לחיצה על אות מבטלת/מחזירה אותה.</p>
+        <div id="result-grid" class="glyph-grid"></div>
+        <button id="btn-save-glyphs" class="btn primary big">💾 שמירה והמשך לכתיבה</button>
+      </div>
+
+      <div class="card">
+        <h3>האותיות השמורות שלי</h3>
+        <p class="hint" id="saved-status"></p>
+        <div id="saved-grid" class="glyph-grid"></div>
+        <div class="btn-row">
+          <button id="btn-export" class="btn">⬇️ גיבוי</button>
+          <label class="btn">⬆️ שחזור
+            <input type="file" accept=".json,application/json" id="input-import" hidden>
+          </label>
+          <button id="btn-clear" class="btn danger">🗑️ מחיקה</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ Screen 3: write ============ -->
+    <section id="screen-write" class="screen" data-screen="write">
+      <div class="card notice" id="no-glyphs-notice" hidden>
+        <p>עדיין לא נשמרו אותיות שלך, אז בינתיים מוצג גופן רגיל. סרקו את התבנית כדי לראות את כתב היד שלכם.</p>
+        <button class="btn primary" data-goto="scan">📷 לסריקה</button>
+      </div>
+
+      <div class="card">
+        <h2>שלב 3 · כתיבה</h2>
+        <textarea id="text-input" dir="auto" rows="5" placeholder="הקלידו כאן טקסט בעברית או באנגלית…"></textarea>
+
+        <details class="settings">
+          <summary>⚙️ הגדרות</summary>
+          <label class="field"><span>גודל אותיות <output data-for="opt-size"></output></span>
+            <input type="range" id="opt-size" min="30" max="160" step="1" value="72"></label>
+          <label class="field"><span>מרווח בין שורות <output data-for="opt-line"></output></span>
+            <input type="range" id="opt-line" min="0.5" max="1.6" step="0.05" value="0.85"></label>
+          <label class="field"><span>מרווח בין אותיות <output data-for="opt-letter"></output></span>
+            <input type="range" id="opt-letter" min="-0.1" max="0.3" step="0.01" value="0.03"></label>
+          <label class="field"><span>מרווח בין מילים <output data-for="opt-word"></output></span>
+            <input type="range" id="opt-word" min="0.1" max="0.8" step="0.01" value="0.3"></label>
+          <label class="field"><span>טבעיות (וריאציה) <output data-for="opt-variation"></output></span>
+            <input type="range" id="opt-variation" min="0" max="100" step="1" value="50"></label>
+
+          <div class="field">
+            <span>צבע דיו</span>
+            <div class="swatches" id="opt-color">
+              <label><input type="radio" name="ink" value="#1c2a8c" checked><i style="background:#1c2a8c"></i>כחול</label>
+              <label><input type="radio" name="ink" value="#151515"><i style="background:#151515"></i>שחור</label>
+              <label><input type="radio" name="ink" value="#4a4a4a"><i style="background:#4a4a4a"></i>עיפרון</label>
+              <label><input type="radio" name="ink" value="#b3261e"><i style="background:#b3261e"></i>אדום</label>
+            </div>
+          </div>
+
+          <label class="field"><span>סוג דף</span>
+            <select id="opt-paper">
+              <option value="lined">שורות</option>
+              <option value="grid">משבצות</option>
+              <option value="blank">חלק</option>
+            </select>
+          </label>
+
+          <label class="check"><input type="checkbox" id="opt-finals" checked> אותיות סופיות אוטומטיות (כ→ך בסוף מילה)</label>
+        </details>
+
+        <div class="btn-row">
+          <button id="btn-reshuffle" class="btn">🎲 וריאציה חדשה</button>
+          <button id="btn-png" class="btn primary">🖼️ PNG</button>
+          <button id="btn-pdf" class="btn primary">📄 PDF</button>
+          <button id="btn-share" class="btn" hidden>📤 שיתוף</button>
+        </div>
+      </div>
+
+      <div id="pages" class="pages"></div>
+    </section>
+  </main>
+
+  <nav class="tabbar">
+    <button class="tab" data-goto="template"><span>📄</span>תבנית</button>
+    <button class="tab" data-goto="scan"><span>📷</span>סריקה</button>
+    <button class="tab" data-goto="write"><span>✍️</span>כתיבה</button>
+  </nav>
+
+  <div id="print-area"><img id="print-img" alt=""></div>
+  <div id="toast" role="status" aria-live="polite"></div>
+  <div id="busy" hidden><div class="spinner"></div><p id="busy-text">מעבד…</p></div>
+
+  <script src="js/config.js"></script>
+  <script src="js/util.js"></script>
+  <script src="js/imageproc.js"></script>
+  <script src="js/template.js"></script>
+  <script src="js/glyph-store.js"></script>
+  <script src="js/scanner.js"></script>
+  <script src="js/corner-editor.js"></script>
+  <script src="js/composer.js"></script>
+  <script src="js/pdf.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
