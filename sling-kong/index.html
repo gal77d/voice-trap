@@ -1,0 +1,1986 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, minimum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#10231f">
+<title>סלינג קונג</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Rubik:wght@500;700;900&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --sat: env(safe-area-inset-top, 0px);
+    --sar: env(safe-area-inset-right, 0px);
+    --sab: env(safe-area-inset-bottom, 0px);
+    --sal: env(safe-area-inset-left, 0px);
+    --gold: #ffd166;
+    --orange: #ff9f43;
+    --ink: #0d1f1b;
+  }
+  *{ box-sizing:border-box; }
+  html,body{
+    margin:0; padding:0; width:100%; height:100%; overflow:hidden;
+    background:var(--ink); color:#fff;
+    touch-action:none; overscroll-behavior:none;
+    -webkit-user-select:none; user-select:none;
+    -webkit-touch-callout:none; -webkit-tap-highlight-color:transparent;
+    font-family:'Rubik', system-ui, -apple-system, 'Segoe UI', Arial, sans-serif;
+  }
+  body{ position:fixed; inset:0; }
+  canvas#game{ position:absolute; inset:0; width:100%; height:100%; display:block; touch-action:none; }
+
+  /* ---------- HUD ---------- */
+  #hud{ position:absolute; inset:0; pointer-events:none; opacity:0; transition:opacity .4s ease; }
+  #hud.show{ opacity:1; }
+  .hud-left{
+    position:absolute; direction:ltr; text-align:left;
+    top:calc(8px + var(--sat)); left:calc(14px + var(--sal));
+  }
+  #score{
+    font-weight:900; font-size:clamp(30px, 8vh, 48px); line-height:1;
+    letter-spacing:1px; transform-origin:left center;
+    text-shadow:0 3px 0 rgba(0,0,0,.35), 0 0 22px rgba(255,190,90,.45);
+  }
+  #sub{ margin-top:4px; font-size:clamp(13px,3.6vh,16px); font-weight:700; opacity:.92; text-shadow:0 2px 0 rgba(0,0,0,.35); }
+  #powers{ display:flex; gap:6px; margin-top:8px; }
+  .pill{
+    display:none; align-items:center; gap:6px; padding:4px 8px 4px 6px; border-radius:999px;
+    background:rgba(10,25,22,.55); border:1.5px solid rgba(255,255,255,.25); font-size:16px;
+  }
+  .pill i{ display:block; width:42px; height:6px; border-radius:6px; background:rgba(255,255,255,.18); overflow:hidden; position:relative; }
+  .pill i b{ position:absolute; inset:0; width:100%; border-radius:6px; background:linear-gradient(90deg,#ffd166,#ff9f43); }
+  #combo{
+    position:absolute; top:calc(10px + var(--sat)); left:50%; transform:translateX(-50%);
+    font-weight:900; font-size:clamp(20px,6vh,34px); color:var(--gold); direction:ltr;
+    text-shadow:0 3px 0 rgba(0,0,0,.35), 0 0 18px rgba(255,170,60,.7);
+    opacity:0; transition:opacity .25s ease;
+  }
+  #combo.show{ opacity:1; }
+  #combo small{ font-size:.55em; font-weight:700; color:#fff; margin-left:6px; }
+  #hint{
+    position:absolute; left:50%; bottom:calc(18px + var(--sab)); transform:translateX(-50%);
+    padding:10px 18px; border-radius:999px; background:rgba(10,25,22,.6); border:1.5px solid rgba(255,255,255,.25);
+    font-size:clamp(14px,4vh,18px); font-weight:700; white-space:nowrap; opacity:0; transition:opacity .5s ease; pointer-events:none;
+  }
+  #hint.show{ opacity:1; animation:hintPulse 1.4s ease-in-out infinite; }
+  @keyframes hintPulse{ 50%{ transform:translateX(-50%) scale(1.05); } }
+
+  /* ---------- כפתורים עליונים ---------- */
+  .top-btns{
+    position:absolute; top:calc(8px + var(--sat)); right:calc(10px + var(--sar));
+    display:flex; gap:12px; z-index:20; direction:ltr;
+  }
+  .ui-btn{ touch-action:manipulation; cursor:pointer; font-family:inherit; -webkit-appearance:none; appearance:none; }
+  .round{
+    width:58px; height:58px; border-radius:50%; padding:0;
+    display:grid; place-items:center; color:#fff;
+    background:rgba(10,25,22,.5); border:2px solid rgba(255,255,255,.35);
+    box-shadow:0 4px 14px rgba(0,0,0,.25);
+    transition:transform .15s ease, background .2s ease, opacity .3s ease;
+  }
+  .round:active{ transform:scale(.9); background:rgba(10,25,22,.75); }
+  .round svg{ width:26px; height:26px; }
+  #btn-pause{ opacity:0; pointer-events:none; }
+  #btn-pause.show{ opacity:1; pointer-events:auto; }
+
+  /* ---------- מסכים ---------- */
+  .screen{
+    position:absolute; inset:0; z-index:10;
+    display:flex; align-items:center; justify-content:center;
+    padding:calc(12px + var(--sat)) calc(16px + var(--sar)) calc(12px + var(--sab)) calc(16px + var(--sal));
+    background:radial-gradient(ellipse at center, rgba(15,30,25,.25) 0%, rgba(5,14,12,.72) 100%);
+    opacity:0; pointer-events:none; transition:opacity .35s ease;
+  }
+  .screen.show{ opacity:1; pointer-events:auto; }
+  .card{
+    display:flex; flex-direction:column; align-items:center; gap:clamp(6px,2.2vh,14px); text-align:center;
+    transform:translateY(24px) scale(.94); transition:transform .5s cubic-bezier(.2,.9,.25,1.25);
+  }
+  .screen.show .card{ transform:none; }
+  .title{
+    margin:0; font-weight:900; line-height:.95; font-size:clamp(44px, 16vh, 96px); letter-spacing:1px;
+    background:linear-gradient(180deg,#fff3c4 0%, #ffd166 40%, #ff8f3c 100%);
+    -webkit-background-clip:text; background-clip:text; color:transparent;
+    filter:drop-shadow(0 5px 0 rgba(60,25,5,.55)) drop-shadow(0 0 24px rgba(255,170,60,.35));
+  }
+  .title span{ display:block; font-size:.62em; letter-spacing:6px; }
+  .subtitle{ font-size:clamp(14px,4vh,18px); font-weight:700; opacity:.9; }
+  .big{
+    min-width:220px; min-height:64px; padding:12px 34px; border:0; border-radius:999px;
+    font-size:clamp(22px,6.5vh,30px); font-weight:900; color:#3a1a00;
+    background:linear-gradient(180deg,#ffe08a 0%,#ffb347 55%,#ff8f3c 100%);
+    box-shadow:0 6px 0 #b4561c, 0 12px 26px rgba(0,0,0,.35), inset 0 2px 0 rgba(255,255,255,.6);
+    transition:transform .12s ease, box-shadow .12s ease;
+  }
+  .big:active{ transform:translateY(4px); box-shadow:0 2px 0 #b4561c, 0 6px 14px rgba(0,0,0,.35), inset 0 2px 0 rgba(255,255,255,.6); }
+  .ghost{
+    min-height:52px; padding:8px 26px; border-radius:999px; font-size:clamp(17px,4.8vh,21px); font-weight:700; color:#fff;
+    background:rgba(255,255,255,.08); border:2px solid rgba(255,255,255,.35);
+  }
+  .ghost:active{ transform:scale(.95); }
+  .row{ display:flex; gap:14px; align-items:center; justify-content:center; flex-wrap:wrap; }
+  .tip{ font-size:clamp(13px,3.8vh,16px); opacity:.85; max-width:520px; }
+  .stat{ font-size:clamp(15px,4.4vh,20px); font-weight:700; }
+  .stat b{ color:var(--gold); }
+  .final{ font-weight:900; font-size:clamp(48px,16vh,84px); line-height:1; direction:ltr;
+    text-shadow:0 4px 0 rgba(0,0,0,.4), 0 0 26px rgba(255,190,90,.5); }
+  .h2{ margin:0; font-size:clamp(26px,8vh,42px); font-weight:900; }
+  .badge{ display:none; padding:4px 14px; border-radius:999px; font-weight:900; color:#3a1a00;
+    background:linear-gradient(90deg,#ffe08a,#ff9f43); animation:badge 0.9s ease-in-out infinite alternate; }
+  .badge.show{ display:inline-block; }
+  @keyframes badge{ to{ transform:scale(1.08) rotate(-2deg); } }
+  .tap{ animation:tapPulse 1.6s ease-in-out infinite; }
+  @keyframes tapPulse{ 50%{ transform:scale(1.06); } }
+
+  #rotate{
+    position:absolute; inset:0; z-index:50; display:none; flex-direction:column; gap:16px;
+    align-items:center; justify-content:center; text-align:center; padding:24px;
+    background:linear-gradient(180deg,#1d3b4a,#0d1f1b); font-size:22px; font-weight:700;
+  }
+  #rotate.show{ display:flex; }
+  #rotate .phone{ width:60px; height:100px; border:4px solid #ffd166; border-radius:12px; animation:rot 1.8s ease-in-out infinite; }
+  @keyframes rot{ 0%,20%{ transform:rotate(0); } 60%,100%{ transform:rotate(-90deg); } }
+</style>
+</head>
+<body>
+<canvas id="game"></canvas>
+
+<div id="hud">
+  <div class="hud-left">
+    <div id="score">0</div>
+    <div id="sub"><span id="bananas">🍌 0</span> &nbsp;·&nbsp; <span id="hud-best">שיא 0</span></div>
+    <div id="powers">
+      <div class="pill" id="pw-magnet"><span>🧲</span><i><b></b></i></div>
+      <div class="pill" id="pw-shield"><span>🛡️</span><i><b></b></i></div>
+      <div class="pill" id="pw-slow"><span>⏳</span><i><b></b></i></div>
+    </div>
+  </div>
+  <div id="combo"></div>
+  <div id="hint">👆 החזיקו כדי להיתפס · שחררו כדי לזנק</div>
+</div>
+
+<div class="top-btns">
+  <button class="ui-btn round" id="btn-pause" aria-label="הפסקה">
+    <svg viewBox="0 0 24 24" fill="currentColor"><rect x="5" y="4" width="5" height="16" rx="1.5"/><rect x="14" y="4" width="5" height="16" rx="1.5"/></svg>
+  </button>
+  <button class="ui-btn round" id="btn-mute" aria-label="השתקה"></button>
+</div>
+
+<div class="screen show" id="menu">
+  <div class="card">
+    <h1 class="title">סלינג<span>קונג</span></h1>
+    <div class="subtitle">🦍 תתנדנדו בג'ונגל, תאספו בננות ואל תיפלו לנהר!</div>
+    <div class="stat">שיא: <b id="menu-best">0</b></div>
+    <button class="ui-btn big tap" id="btn-play">▶ שחקו</button>
+    <div class="tip">החזיקו את האצבע בכל מקום במסך = נתפסים בחבל · שחררו = עפים</div>
+  </div>
+</div>
+
+<div class="screen" id="pause">
+  <div class="card">
+    <h2 class="h2">⏸ הפסקה</h2>
+    <button class="ui-btn big" id="btn-resume">המשך</button>
+    <div class="row">
+      <button class="ui-btn ghost" id="btn-restart-p">↻ מההתחלה</button>
+      <button class="ui-btn ghost" id="btn-menu-p">תפריט</button>
+    </div>
+  </div>
+</div>
+
+<div class="screen" id="over">
+  <div class="card">
+    <h2 class="h2" id="over-title">נפלתם!</h2>
+    <div class="final" id="final-score">0</div>
+    <span class="badge" id="new-best">🏆 שיא חדש!</span>
+    <div class="stat">מרחק <b id="final-dist">0</b> מ' · 🍌 <b id="final-ban">0</b> · שיא <b id="final-best">0</b></div>
+    <div class="row">
+      <button class="ui-btn big" id="btn-again">↻ שוב</button>
+      <button class="ui-btn ghost" id="btn-menu-o">תפריט</button>
+    </div>
+  </div>
+</div>
+
+<div id="rotate">
+  <div class="phone"></div>
+  <div>סובבו את הטלפון לרוחב 🦍</div>
+</div>
+
+<script>
+'use strict';
+/* =====================================================================
+   סלינג קונג — משחק ארקייד של גורילה מתנדנדת
+   ===================================================================== */
+
+/* ===================== קבועים לכוונון ===================== */
+const CFG = {
+  // פיזיקה
+  PHYS_HZ: 120,            // קצב צעד פיזיקה קבוע
+  MAX_STEPS: 10,           // מקסימום צעדים בפריים (מונע "ספירלת מוות")
+  GRAVITY: 1500,           // כוח משיכה (יחידות עולם לשנייה²)
+  AIR_DRAG: 0.05,          // דעיכה אווירית עדינה בתעופה
+  SWING_DAMP: 0.04,        // דעיכה זוויתית בזמן נדנוד
+  MAX_SPEED: 1450,         // מהירות מקסימלית בתעופה (נגד "פיצוצים")
+  MAX_SWING_SPEED: 1080,   // מהירות משיקית מקסימלית על החבל
+  PUMP_ACCEL: 560,         // "שאיבה" — תאוצה משיקית בחלק התחתון של הנדנוד
+  RELEASE_BOOST: 1.04,     // בונוס קטן לתנופה ברגע השחרור (תחושת ארקייד)
+  ROPE_MIN: 50,            // אורך חבל מינימלי
+  ROPE_MAX: 235,           // טווח תפיסה = אורך חבל מקסימלי
+  ROPE_SEGS: 12,           // נקודות בחבל הוויזואלי
+  ROPE_SHOOT_TIME: 0.07,   // זמן "ירי" החבל לנקודה
+  HAND_OFFSET: 26,         // מרחק הידיים ממרכז הגורילה
+  PLAYER_R: 21,            // רדיוס פגיעה של הגורילה
+  // תחושת שליטה
+  COYOTE_TIME: 0.12,       // חסד: אפשר לתפוס נקודה שיצאנו מהטווח שלה ממש עכשיו
+  COYOTE_EXTRA: 60,        // כמה מעבר לטווח מותר בזמן החסד
+  INPUT_BUFFER: 0.14,      // לחיצה קצרה נשמרת לזמן קצר
+  BUFFER_MIN_HOLD: 0.18,   // תפיסה מבאפר מחזיקה לפחות כך
+  // עולם
+  VIEW_H: 680,             // גובה העולם הנראה (לפני זום)
+  WATER_Y: 650,            // פני הנהר — נפילה = מוות
+  START_X: 300,
+  PEG_Y_MIN: 90, PEG_Y_MAX: 370,
+  DIFF_DIST: 15000,        // אחרי כמה יחידות הקושי מקסימלי
+  GAP_EASY: [250, 330], GAP_HARD: [330, 500],
+  BREAK_TIME: [1.5, 0.8],  // זמן עד שנקודה נשברת (קל → קשה)
+  POWER_GAP: 2600,         // מרווח מינימלי בין פאוור-אפים
+  PX_PER_M: 40,            // יחידות עולם למטר
+  // פאוור-אפים
+  MAGNET_TIME: 8, MAGNET_R: 270,
+  SHIELD_TIME: 14,
+  SLOW_TIME: 5, SLOW_SCALE: 0.55,
+  // קומבו
+  COMBO_PER_MULT: 3, COMBO_MAX_MULT: 6, COMBO_HOLD_LIMIT: 3.2,
+  // מצלמה
+  LOOKAHEAD: 0.38, CAM_LERP_X: 4.5, CAM_LERP_Y: 3, ZOOM_OUT_MAX: 0.17,
+  // ביצועים
+  DPR_MAX: 2, MAX_PARTICLES: 380,
+};
+const DT = 1 / CFG.PHYS_HZ;
+const TAU = Math.PI * 2;
+
+/* ===================== עזרים ===================== */
+const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
+const lerp = (a, b, t) => a + (b - a) * t;
+const rand = (a, b) => a + Math.random() * (b - a);
+const pick = arr => arr[(Math.random() * arr.length) | 0];
+function angDiff(a, b) { let d = (b - a) % TAU; if (d > Math.PI) d -= TAU; if (d < -Math.PI) d += TAU; return d; }
+const easeOutBack = t => { const c1 = 1.70158, c3 = c1 + 1; return 1 + c3 * Math.pow(t - 1, 3) + c1 * Math.pow(t - 1, 2); };
+function mulberry32(a) { return function () { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+const store = {
+  get(k, d) { try { const v = localStorage.getItem(k); return v === null ? d : v; } catch (e) { return d; } },
+  set(k, v) { try { localStorage.setItem(k, v); } catch (e) { } }
+};
+const $ = id => document.getElementById(id);
+
+/* =====================================================================
+   אודיו — סינתזה מלאה ב-Web Audio (בלי קבצים)
+   ההקשר נוצר רק אחרי המגע הראשון (דרישת דפדפני נייד)
+   ===================================================================== */
+const Sound = (() => {
+  let ac = null, master, sfx, musicBus, musicFilter, noiseBuf, timer = null;
+  let muted = store.get('slingkong_muted', '0') === '1';
+  let musicLevel = 0.3, nextT = 0, stepIdx = 0;
+  const BPM = 100, STEP = 60 / BPM / 4;
+  const mtof = n => 440 * Math.pow(2, (n - 69) / 12);
+  // התקדמות אקורדים: Am F C G
+  const CHORDS = [[57, 60, 64], [53, 57, 60], [55, 60, 64], [55, 59, 62]];
+  const BASS = [45, 41, 48, 43];
+  const PENTA = [69, 72, 74, 76, 79, 81, 84];
+  // מנגינת מרימבה קבועה (נוצרת מזרע כדי שתחזור על עצמה)
+  const MELODY = (() => {
+    const r = mulberry32(7), m = []; let idx = 3;
+    for (let b = 0; b < 4; b++) {
+      const bar = new Array(16).fill(-1);
+      for (let s = 0; s < 16; s += 2) {
+        if (r() < (s % 4 === 0 ? 0.7 : 0.4)) { idx = clamp(idx + ((r() * 5) | 0) - 2, 0, PENTA.length - 1); bar[s] = idx; }
+        else if (r() < 0.15) bar[s + 1] = clamp(idx + 1, 0, PENTA.length - 1);
+      }
+      m.push(bar);
+    }
+    return m;
+  })();
+
+  function unlock() {
+    if (!ac) {
+      const AC = window.AudioContext || window.webkitAudioContext;
+      if (!AC) return;
+      try { ac = new AC(); } catch (e) { return; }
+      build();
+    }
+    if (ac.state !== 'running') ac.resume().catch(() => { });
+  }
+  function build() {
+    const comp = ac.createDynamicsCompressor();
+    comp.threshold.value = -16; comp.ratio.value = 4; comp.attack.value = 0.005; comp.release.value = 0.2;
+    comp.connect(ac.destination);
+    master = ac.createGain(); master.gain.value = muted ? 0 : 0.85; master.connect(comp);
+    sfx = ac.createGain(); sfx.gain.value = 0.9; sfx.connect(master);
+    musicFilter = ac.createBiquadFilter(); musicFilter.type = 'lowpass'; musicFilter.frequency.value = 14000; musicFilter.connect(master);
+    musicBus = ac.createGain(); musicBus.gain.value = 0; musicBus.connect(musicFilter);
+    musicBus.gain.setTargetAtTime(musicLevel, ac.currentTime, 0.5);
+    // באפר רעש לבן לשימוש חוזר
+    noiseBuf = ac.createBuffer(1, ac.sampleRate * 2, ac.sampleRate);
+    const d = noiseBuf.getChannelData(0);
+    for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+    nextT = ac.currentTime + 0.1;
+    timer = setInterval(schedule, 25);
+  }
+
+  // ---- אבני בניין ----
+  function tone(type, f0, t, dur, gain, f1, dest, attack) {
+    const o = ac.createOscillator(), g = ac.createGain();
+    o.type = type; o.frequency.setValueAtTime(f0, t);
+    if (f1) o.frequency.exponentialRampToValueAtTime(f1, t + dur);
+    const a = attack || 0.006;
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(gain, t + a);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    o.connect(g); g.connect(dest || sfx);
+    o.start(t); o.stop(t + dur + 0.03);
+  }
+  function noise(t, dur, gain, type, f0, f1, q, dest) {
+    const s = ac.createBufferSource(), f = ac.createBiquadFilter(), g = ac.createGain();
+    s.buffer = noiseBuf; f.type = type; f.Q.value = q || 1;
+    f.frequency.setValueAtTime(f0, t);
+    if (f1) f.frequency.exponentialRampToValueAtTime(f1, t + dur);
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(gain, t + 0.008);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    s.connect(f); f.connect(g); g.connect(dest || sfx);
+    s.start(t, Math.random() * 1.5); s.stop(t + dur + 0.03);
+  }
+  const ok = () => ac && ac.state === 'running';
+
+  // ---- מוזיקת רקע: תיפוף שבטי, בס, מרימבה ופד חם ----
+  function schedule() {
+    if (!ac) return;
+    if (nextT < ac.currentTime - 0.2) nextT = ac.currentTime + 0.05;
+    while (nextT < ac.currentTime + 0.15) {
+      if (musicLevel > 0.001 && ac.state === 'running') playStep(stepIdx, nextT);
+      nextT += STEP; stepIdx = (stepIdx + 1) % 64;
+    }
+  }
+  function playStep(i, t) {
+    const bar = i >> 4, s = i & 15, M = musicBus;
+    if (s === 0 || s === 8) tone('sine', 130, t, 0.32, 0.55, 46, M);
+    if (s === 6 || s === 11 || s === 14) tone('sine', 240, t, 0.16, 0.16, 150, M);
+    if (s & 1) noise(t, 0.035, 0.035, 'highpass', 7000, 0, 0.7, M);
+    else if (s % 4 === 2) noise(t, 0.06, 0.07, 'highpass', 5500, 0, 0.7, M);
+    if (s === 0 || s === 3 || s === 8 || s === 10) {
+      const n = BASS[bar] + (s === 8 ? 7 : 0) + (s === 10 ? 12 : 0);
+      tone('triangle', mtof(n), t, 0.3, 0.26, 0, M, 0.01);
+    }
+    const mi = MELODY[bar][s];
+    if (mi >= 0) {
+      const f = mtof(PENTA[mi]);
+      tone('sine', f, t, 0.35, 0.11, 0, M, 0.003);
+      tone('sine', f * 4, t, 0.08, 0.025, 0, M, 0.002);
+    }
+    if (s === 0) {
+      for (const n of CHORDS[bar]) {
+        for (const det of [-7, 7]) {
+          const o = ac.createOscillator(), f = ac.createBiquadFilter(), g = ac.createGain();
+          o.type = 'sawtooth'; o.frequency.value = mtof(n); o.detune.value = det;
+          f.type = 'lowpass'; f.frequency.value = 900;
+          g.gain.setValueAtTime(0.0001, t);
+          g.gain.linearRampToValueAtTime(0.011, t + 0.5);
+          g.gain.setValueAtTime(0.011, t + STEP * 13);
+          g.gain.linearRampToValueAtTime(0.0001, t + STEP * 16 + 0.1);
+          o.connect(f); f.connect(g); g.connect(M);
+          o.start(t); o.stop(t + STEP * 16 + 0.15);
+        }
+      }
+    }
+  }
+
+  // ---- אפקטים ----
+  const fx = {
+    grab(power) {
+      if (!ok()) return; const t = ac.currentTime;
+      noise(t, 0.09, 0.25, 'bandpass', 2500, 900, 2);
+      tone('triangle', 180 + power * 120, t, 0.14, 0.22, 330 + power * 160);
+    },
+    release(speed) {
+      if (!ok()) return; const t = ac.currentTime, k = clamp(speed / 1200, 0.2, 1);
+      noise(t, 0.28, 0.18 * k + 0.04, 'bandpass', 400, 1800 * k + 400, 1.4);
+    },
+    banana(combo) {
+      if (!ok()) return; const t = ac.currentTime;
+      const n = PENTA[clamp(combo, 0, PENTA.length - 1)] + 12;
+      tone('sine', mtof(n), t, 0.12, 0.2);
+      tone('triangle', mtof(n + 7), t + 0.05, 0.14, 0.13);
+    },
+    golden() {
+      if (!ok()) return; const t = ac.currentTime;
+      [0, 4, 7, 12, 16].forEach((d, i) => tone('triangle', mtof(81 + d), t + i * 0.055, 0.25, 0.15));
+      noise(t, 0.5, 0.06, 'highpass', 8000, 0, 0.5);
+    },
+    power() {
+      if (!ok()) return; const t = ac.currentTime;
+      tone('sine', 300, t, 0.4, 0.22, 1300);
+      tone('triangle', 450, t + 0.06, 0.35, 0.12, 1800);
+    },
+    combo(m) {
+      if (!ok()) return; const t = ac.currentTime;
+      tone('square', mtof(72 + m * 2), t, 0.09, 0.07);
+      tone('square', mtof(79 + m * 2), t + 0.07, 0.12, 0.07);
+    },
+    shield() {
+      if (!ok()) return; const t = ac.currentTime;
+      tone('square', 900, t, 0.25, 0.12, 300);
+      noise(t, 0.2, 0.2, 'bandpass', 3000, 800, 3);
+    },
+    hit() {
+      if (!ok()) return; const t = ac.currentTime;
+      tone('sine', 160, t, 0.45, 0.6, 38);
+      noise(t, 0.3, 0.35, 'lowpass', 2500, 200, 1);
+    },
+    splash() {
+      if (!ok()) return; const t = ac.currentTime;
+      noise(t, 0.6, 0.4, 'lowpass', 3000, 250, 0.8);
+      tone('sine', 420, t, 0.25, 0.12, 120);
+    },
+    crack() {
+      if (!ok()) return; const t = ac.currentTime;
+      noise(t, 0.06, 0.4, 'highpass', 1800, 0, 1);
+      noise(t + 0.07, 0.12, 0.3, 'bandpass', 900, 300, 2);
+    },
+    bird() {
+      if (!ok()) return; const t = ac.currentTime;
+      tone('sine', 2200, t, 0.07, 0.05, 3200);
+      tone('sine', 2400, t + 0.1, 0.08, 0.05, 3400);
+    },
+    click() {
+      if (!ok()) return; tone('triangle', 660, ac.currentTime, 0.07, 0.15, 990);
+    },
+    record() {
+      if (!ok()) return; const t = ac.currentTime;
+      [0, 4, 7, 12].forEach((d, i) => tone('triangle', mtof(72 + d), t + i * 0.1, 0.4, 0.16));
+    },
+  };
+
+  return {
+    unlock, fx,
+    get muted() { return muted; },
+    toggleMute() {
+      muted = !muted; store.set('slingkong_muted', muted ? '1' : '0');
+      if (master) master.gain.setTargetAtTime(muted ? 0 : 0.85, ac.currentTime, 0.05);
+      return muted;
+    },
+    music(level) { musicLevel = level; if (ac) musicBus.gain.setTargetAtTime(level, ac.currentTime, 0.35); },
+    slow(on) { if (ac) musicFilter.frequency.setTargetAtTime(on ? 650 : 14000, ac.currentTime, 0.25); },
+    suspend() { if (ac && ac.state === 'running') ac.suspend().catch(() => { }); },
+    resume() { if (ac && ac.state !== 'running') ac.resume().catch(() => { }); },
+  };
+})();
+
+/* ===================== קנבס ומסך ===================== */
+const cvs = $('game');
+const ctx = cvs.getContext('2d', { alpha: false });
+let W = 0, H = 0, DPR = 1, BGR = 1, dprCap = CFG.DPR_MAX, baseScale = 1;
+const isTouch = matchMedia('(pointer: coarse)').matches || 'ontouchstart' in window;
+const BG = {};        // שכבות רקע מרונדרות מראש
+const SPR = {};       // ספרייטים מרונדרים מראש (glow וכו')
+
+/* ===================== מצב משחק ===================== */
+let state = 'menu';   // menu | play | paused | dying | over
+let G = null;         // עולם נוכחי
+let best = parseInt(store.get('slingkong_best', '0'), 10) || 0;
+let firstRun = true;
+const input = { down: false, pressT: -999, pointers: new Set() };
+
+function newWorld() {
+  G = {
+    t: 0, step: 0,
+    pegs: [], bananas: [], powerups: [], spikes: [], birds: [], ropes: [],
+    parts: [], pops: [], trail: [],
+    rope: null, lastPeg: null, pegId: 0, genCount: 0, lastPowerX: 0,
+    nearPeg: null, coyote: { peg: null, t: 0 },
+    combo: 0, mult: 1, bananaPts: 0, bananaCount: 0, maxX: CFG.START_X, score: 0,
+    power: { magnet: 0, shield: 0, slow: 0 },
+    cam: { x: 0, y: 380, zoom: 1, trauma: 0 },
+    birdTimer: 5, timeScale: 1, flash: 0, flashColor: '255,255,255',
+    dyingT: 0, deathBy: '', hintShown: false, released: false,
+    player: {
+      x: 0, y: 0, px: 0, py: 0, vx: 0, vy: 0,
+      attached: null, L: 150, theta: 0, omega: 0, attachT: 0,
+      hx: 0, hy: 0, rot: 0, tuck: 0, squash: 0, spin: 0,
+      autoHold: true, bufHold: 0, dead: false, invuln: 0, lastPeg: null, blink: 2,
+    },
+  };
+  const p0 = addPeg(CFG.START_X, 230, 'normal');
+  G.lastPeg = p0; G.genCount = 1;
+  const P = G.player;
+  P.attached = p0; P.L = 160; P.theta = 1.0; P.omega = 0; P.lastPeg = p0;
+  placeOnRope(P);
+  P.px = P.x; P.py = P.y;
+  P.rot = Math.atan2(p0.x - P.x, -(p0.y - P.y));
+  createRope(p0);
+  G.rope.shoot = 1;
+  generate(CFG.START_X + 2600);
+  G.cam.x = P.x + 260; G.cam.y = 380;
+}
+
+/* ===================== יצירה פרוצדורלית ===================== */
+const difficulty = x => clamp((x - CFG.START_X) / CFG.DIFF_DIST, 0, 1);
+
+function addPeg(x, y, type) {
+  const p = {
+    id: G.pegId++, x, y, bx: x, by: y, type, vx: 0, vy: 0,
+    ph: Math.random() * TAU, amp: 0, ax: 0, ay: 0, spd: 0,
+    breakT: -1, breakMax: 1, broken: false, fallV: 0, rot: 0, pulse: 0,
+  };
+  if (type === 'move') {
+    const d = difficulty(x);
+    p.amp = rand(lerp(45, 70, d), lerp(80, 120, d));
+    const axis = Math.random();
+    if (axis < 0.45) { p.ax = 1; p.ay = 0; }
+    else if (axis < 0.85) { p.ax = 0; p.ay = 1; }
+    else { p.ax = 0.707; p.ay = 0.707 * (Math.random() < 0.5 ? 1 : -1); }
+    const vy = p.amp * Math.abs(p.ay);   // שומרים את הנקודה בתוך הטווח האנכי
+    p.by = clamp(p.by, CFG.PEG_Y_MIN + vy * 0.5, CFG.PEG_Y_MAX - vy);
+    p.spd = rand(0.9, 1.6) * lerp(1, 1.35, d);
+    p.y = p.by;
+  }
+  G.pegs.push(p);
+  return p;
+}
+function addSpike(x, y, d) {
+  const s = { x, y, by: y, r: rand(22, 28), rot: Math.random() * TAU, vr: rand(-1.5, 1.5), amp: 0, spd: 0, ph: Math.random() * TAU };
+  if (d > 0.3 && Math.random() < 0.45) { s.amp = rand(40, 80); s.spd = rand(1.2, 2.2); }
+  G.spikes.push(s);
+  return s;
+}
+
+// יוצר נקודות אחיזה, בננות, מכשולים ופאוור-אפים עד לנקודה X
+function generate(toX) {
+  while (G.lastPeg.bx < toX) {
+    const A = G.lastPeg, d = difficulty(A.bx), n = G.genCount++;
+    const gap = rand(lerp(CFG.GAP_EASY[0], CFG.GAP_HARD[0], d), lerp(CFG.GAP_EASY[1], CFG.GAP_HARD[1], d));
+    const dy = rand(-1, 1) * lerp(80, 170, d);
+    const x = A.bx + gap, y = clamp(A.by + dy, CFG.PEG_Y_MIN, CFG.PEG_Y_MAX);
+    let type = 'normal';
+    if (n > 4) {
+      const r = Math.random(), pb = lerp(0.05, 0.24, d), pm = lerp(0.06, 0.3, d);
+      if (r < pb && A.type !== 'break') type = 'break';
+      else if (r < pb + pm) type = 'move';
+    }
+    const B = addPeg(x, y, type);
+    const mx = (A.bx + x) / 2, top = Math.min(A.by, B.by);
+
+    // קוצים — מעל או מתחת למסלול הסביר
+    let spike = null;
+    if (n > 3 && Math.random() < lerp(0.1, 0.55, d)) {
+      const above = Math.random() < 0.6;
+      const sy = above ? top - rand(115, 170) : Math.max(A.by, B.by) + rand(150, 210);
+      spike = addSpike(mx + rand(-30, 30), clamp(sy, -160, CFG.WATER_Y - 100), d);
+    }
+    // שורת בננות לאורך קשת התעופה
+    if (Math.random() < 0.78) {
+      const k = 3 + ((Math.random() * 3) | 0);
+      const p0x = A.bx + 60, p0y = A.by + 150, cx = mx, cy = top - rand(30, 100), p1x = x - 60, p1y = B.by + 90;
+      const goldIdx = Math.random() < 0.05 + d * 0.03 ? (k >> 1) : -1;
+      for (let i = 0; i < k; i++) {
+        const t = lerp(0.28, 0.78, i / (k - 1));
+        const bx = (1 - t) * (1 - t) * p0x + 2 * (1 - t) * t * cx + t * t * p1x;
+        const by = (1 - t) * (1 - t) * p0y + 2 * (1 - t) * t * cy + t * t * p1y;
+        if (spike && Math.hypot(bx - spike.x, by - spike.y) < spike.r + 55) continue;
+        G.bananas.push({ x: bx, y: by, gold: i === goldIdx, taken: false, ph: Math.random() * TAU });
+      }
+    }
+    // פאוור-אפ נדיר
+    if (n > 6 && x - G.lastPowerX > CFG.POWER_GAP && Math.random() < 0.2) {
+      const py = top - 75;
+      if (!spike || Math.hypot(mx - spike.x, py - spike.y) > 90) {
+        G.powerups.push({ x: mx, y: py, kind: pick(['magnet', 'shield', 'slow']), ph: Math.random() * TAU, taken: false });
+        G.lastPowerX = x;
+      }
+    }
+    G.lastPeg = B;
+  }
+}
+
+function cleanup(leftX) {
+  const keep = o => o.x > leftX;
+  G.pegs = G.pegs.filter(p => p.x > leftX || p === G.player.attached || (G.rope && G.rope.peg === p));
+  G.bananas = G.bananas.filter(b => !b.taken && keep(b));
+  G.powerups = G.powerups.filter(b => !b.taken && keep(b));
+  G.spikes = G.spikes.filter(keep);
+  G.birds = G.birds.filter(b => b.x > leftX - 200 && b.y < CFG.WATER_Y + 300);
+}
+
+/* =====================================================================
+   פיזיקה — צעד קבוע של 120Hz
+   מטוטלת אמיתית: זווית θ ומהירות זוויתית ω סביב נקודת האחיזה
+   ===================================================================== */
+function placeOnRope(P) {
+  const a = P.attached, s = Math.sin(P.theta), c = Math.cos(P.theta);
+  P.x = a.x + P.L * s; P.y = a.y + P.L * c;
+  P.vx = P.L * P.omega * c + a.vx;
+  P.vy = -P.L * P.omega * s + a.vy;
+  const hl = Math.max(4, P.L - CFG.HAND_OFFSET);
+  P.hx = a.x + hl * s; P.hy = a.y + hl * c;
+}
+
+function step(dt) {
+  G.t += dt; G.step++;
+  const P = G.player;
+  P.px = P.x; P.py = P.y;
+
+  // --- תנועת נקודות אחיזה ---
+  for (const p of G.pegs) {
+    if (p.broken) {
+      p.fallV += CFG.GRAVITY * dt; p.y += p.fallV * dt; p.rot += 5 * dt;
+      continue;
+    }
+    if (p.type === 'move') {
+      const a = p.ph + G.t * p.spd, s = Math.sin(a), c = Math.cos(a);
+      p.x = p.bx + p.ax * p.amp * s; p.y = p.by + p.ay * p.amp * s;
+      p.vx = p.ax * p.amp * c * p.spd; p.vy = p.ay * p.amp * c * p.spd;
+    }
+    if (p.breakT > 0) { p.breakT -= dt; if (p.breakT <= 0) breakPeg(p); }
+    if (p.pulse > 0) p.pulse = Math.max(0, p.pulse - dt * 4);
+  }
+
+  // --- קלט: תפיסה / שחרור ---
+  if (!P.dead) {
+    if (P.attached) {
+      P.attachT += dt;
+      if (P.bufHold > 0) P.bufHold -= dt;
+      const holding = input.down || P.autoHold || P.bufHold > 0;
+      if (!holding && state === 'play') release();
+      else if (P.attachT > CFG.COMBO_HOLD_LIMIT && G.combo > 0) { G.combo = 0; updateMult(); }
+    } else {
+      const buffered = (G.t - input.pressT) < CFG.INPUT_BUFFER;
+      if ((input.down || buffered) && state === 'play') tryGrab(input.down ? 0 : CFG.BUFFER_MIN_HOLD);
+    }
+  }
+
+  // --- אינטגרציה ---
+  if (P.attached) swingStep(P, dt);
+  else flyStep(P, dt);
+
+  // --- Coyote time: זוכרים את הנקודה האחרונה שהייתה בטווח ---
+  if (!P.attached && !P.dead) {
+    const np = nearestPeg(P, CFG.ROPE_MAX);
+    G.nearPeg = np;
+    if (np) { G.coyote.peg = np; G.coyote.t = CFG.COYOTE_TIME; }
+    else G.coyote.t -= dt;
+  } else G.nearPeg = null;
+
+  // --- טיימרים ---
+  if (P.invuln > 0) P.invuln -= dt;
+  const realDt = dt / Math.max(0.3, G.timeScale);
+  for (const k of ['magnet', 'shield', 'slow']) {
+    if (G.power[k] > 0) {
+      G.power[k] -= k === 'slow' ? realDt : dt;
+      if (G.power[k] <= 0) { G.power[k] = 0; if (k === 'slow') Sound.slow(false); }
+    }
+  }
+
+  updateObstacles(dt);
+  if (state === 'play') collisions(P, dt);
+  updateRopes(dt);
+
+  // --- נפילה לנהר ---
+  if (P.y > CFG.WATER_Y + 6 && !P.attached) {
+    if (!P.dead && state === 'play') {
+      if (G.power.shield > 0) {
+        // המגן מציל: קפיצה חזרה למעלה
+        G.power.shield = 0; P.invuln = 1;
+        P.vy = -1250; P.y = CFG.WATER_Y;
+        splash(P.x, CFG.WATER_Y, 0.6); Sound.fx.shield(); shake(0.4);
+        addPop(P.x, P.y - 60, 'המגן הציל!', '#7fdcff', 30);
+      } else die('water');
+    } else if (P.dead) {
+      // שקיעה איטית
+      P.vy = Math.min(P.vy, 90); P.vx *= 0.9;
+    }
+  }
+
+  // --- יצירה וניקוי ---
+  if ((G.step & 15) === 0) {
+    const halfW = (W / 2) / (baseScale * G.cam.zoom) + 50;
+    generate(G.cam.x + halfW + 1200);
+    if ((G.step & 63) === 0) cleanup(G.cam.x - halfW - 500);
+  }
+  if (state === 'play') G.maxX = Math.max(G.maxX, P.x);
+}
+
+// נדנוד על החבל: מטוטלת עם אילוץ מרחק קבוע
+function swingStep(P, dt) {
+  const L = P.L;
+  let alpha = -(CFG.GRAVITY / L) * Math.sin(P.theta) - CFG.SWING_DAMP * P.omega;
+  // "שאיבה" ארקייד: תאוצה משיקית בחצי התחתון של הקשת
+  const c = Math.cos(P.theta);
+  if (c > 0.15 && Math.abs(P.omega * L) < CFG.MAX_SWING_SPEED) {
+    const dir = Math.abs(P.omega) < 0.25 ? 1 : Math.sign(P.omega);
+    alpha += dir * (CFG.PUMP_ACCEL / L) * c;
+  }
+  P.omega += alpha * dt;                          // אוילר חצי-אימפליציטי — יציב
+  const maxW = CFG.MAX_SWING_SPEED / L;
+  P.omega = clamp(P.omega, -maxW, maxW);
+  P.theta += P.omega * dt;
+  if (P.theta > Math.PI) P.theta -= TAU; else if (P.theta < -Math.PI) P.theta += TAU;
+  placeOnRope(P);
+}
+
+// תעופה חופשית
+function flyStep(P, dt) {
+  P.vy += CFG.GRAVITY * dt;
+  const drag = 1 - CFG.AIR_DRAG * dt;
+  P.vx *= drag; P.vy *= drag;
+  const sp = Math.hypot(P.vx, P.vy);
+  if (sp > CFG.MAX_SPEED) { const k = CFG.MAX_SPEED / sp; P.vx *= k; P.vy *= k; }
+  P.x += P.vx * dt; P.y += P.vy * dt;
+}
+
+function nearestPeg(P, maxD) {
+  let bestP = null, bd = maxD * maxD;
+  for (const p of G.pegs) {
+    if (p.broken) continue;
+    const dx = p.x - P.x, dy = p.y - P.y, d = dx * dx + dy * dy;
+    if (d < bd) { bd = d; bestP = p; }
+  }
+  return bestP;
+}
+
+// Snap לנקודה הקרובה + Coyote
+function tryGrab(bufHold) {
+  const P = G.player;
+  let p = nearestPeg(P, CFG.ROPE_MAX);
+  if (!p && G.coyote.t > 0 && G.coyote.peg && !G.coyote.peg.broken) {
+    const c = G.coyote.peg;
+    if (Math.hypot(c.x - P.x, c.y - P.y) < CFG.ROPE_MAX + CFG.COYOTE_EXTRA) p = c;
+  }
+  if (!p) return false;
+  attach(p);
+  P.bufHold = bufHold;
+  input.pressT = -999;  // הלחיצה "נצרכה"
+  return true;
+}
+
+// תפיסה: אורך החבל נקבע עכשיו, והתנע הזוויתי נשמר
+function attach(p) {
+  const P = G.player;
+  const rx = P.x - p.x, ry = P.y - p.y;
+  const d = Math.max(1, Math.hypot(rx, ry));
+  const L = clamp(d, CFG.ROPE_MIN, CFG.ROPE_MAX + CFG.COYOTE_EXTRA);
+  const rvx = P.vx - p.vx, rvy = P.vy - p.vy;           // מהירות יחסית לנקודה (נקודות נעות)
+  const h = rx * rvy - ry * rvx;                         // תנע זוויתי ליחידת מסה: r × v
+  const speedIn = Math.hypot(rvx, rvy);
+  P.theta = Math.atan2(rx, ry);
+  P.L = L;
+  P.omega = -h / (L * L);                                // שימור: h = -L²ω
+  const maxW = CFG.MAX_SWING_SPEED / L;
+  P.omega = clamp(P.omega, -maxW, maxW);
+  P.attached = p; P.attachT = 0;
+  placeOnRope(P);
+  P.squash = 1; p.pulse = 1;
+
+  // קומבו: תנופות רצופות לנקודות חדשות
+  if (P.lastPeg && p !== P.lastPeg) { G.combo++; }
+  else if (p === P.lastPeg && G.released) { G.combo = 0; }
+  P.lastPeg = p;
+  updateMult(true);
+
+  if (p.type === 'break' && p.breakT < 0) {
+    p.breakMax = p.breakT = lerp(CFG.BREAK_TIME[0], CFG.BREAK_TIME[1], difficulty(p.x));
+  }
+  createRope(p);
+  G.rope.wob = clamp(speedIn / 90, 2, 10);
+  Sound.fx.grab(clamp(speedIn / 1200, 0, 1));
+  burst(p.x, p.y, 6, { type: 'dot', color: '#f3dcae', spd: [40, 130], life: [0.3, 0.6], size: [3, 6], g: -40, drag: 3 });
+  for (let i = 0; i < 2; i++) leaf(p.x + rand(-20, 20), p.y + rand(-10, 10));
+  shake(0.06 + clamp(speedIn / 1400, 0, 1) * 0.1);
+}
+
+function release() {
+  const P = G.player, p = P.attached;
+  if (!p) return;
+  // התנע המשיקי נשמר (+ מהירות הנקודה עצמה)
+  P.vx = p.vx + (P.vx - p.vx) * CFG.RELEASE_BOOST;
+  P.vy = p.vy + (P.vy - p.vy) * CFG.RELEASE_BOOST;
+  P.attached = null; P.bufHold = 0;
+  if (G.rope) { G.rope.attached = false; G.rope = null; }
+  G.released = true;
+  const sp = Math.hypot(P.vx, P.vy);
+  Sound.fx.release(sp);
+  burst(P.x, P.y, 4, { type: 'dot', color: '#fff2d6', spd: [20, 80], life: [0.25, 0.45], size: [2, 4], g: 0, drag: 4 });
+  if (!G.hintShown && state === 'play') { G.hintShown = true; $('hint').classList.remove('show'); }
+}
+
+function breakPeg(p) {
+  p.broken = true; p.fallV = -120; p.breakT = -2;
+  Sound.fx.crack(); shake(0.25);
+  burst(p.x, p.y, 10, { type: 'chip', color: '#8a5a32', spd: [80, 260], life: [0.5, 0.9], size: [3, 6], g: 900, drag: 1 });
+  if (G.player.attached === p) release();
+}
+
+function updateMult(fromGrab) {
+  const old = G.mult;
+  G.mult = Math.min(CFG.COMBO_MAX_MULT, 1 + Math.floor(G.combo / CFG.COMBO_PER_MULT));
+  if (G.mult > old && fromGrab && state === 'play') {
+    const P = G.player;
+    addPop(P.x, P.y - 60, 'קומבו x' + G.mult, '#ffd166', 34);
+    Sound.fx.combo(G.mult);
+    const el = $('combo');
+    el.animate([{ transform: 'translateX(-50%) scale(1.6)' }, { transform: 'translateX(-50%) scale(1)' }], { duration: 380, easing: 'cubic-bezier(.2,.9,.3,1.4)' });
+  }
+}
+
+/* ===================== מכשולים ואוספים ===================== */
+function updateObstacles(dt) {
+  const d = difficulty(G.player.x);
+  for (const s of G.spikes) {
+    s.rot += s.vr * dt;
+    if (s.amp) s.y = s.by + Math.sin(s.ph + G.t * s.spd) * s.amp;
+  }
+  // ציפורים
+  if (state === 'play' && d > 0.08) {
+    G.birdTimer -= dt;
+    if (G.birdTimer <= 0) {
+      G.birdTimer = rand(lerp(7, 2.4, d), lerp(10, 4, d));
+      const halfW = (W / 2) / (baseScale * G.cam.zoom);
+      G.birds.push({
+        x: G.cam.x + halfW + 120, y: rand(60, 470), by: 0,
+        vx: -rand(130, 220) * (1 + d * 0.5), amp: rand(15, 55), ph: Math.random() * TAU,
+        hit: false, vy: 0, color: pick(['#e8483b', '#2fb4e8', '#8ad13c', '#f2a03a']),
+      });
+      const b = G.birds[G.birds.length - 1]; b.by = b.y;
+      Sound.fx.bird();
+    }
+  }
+  for (const b of G.birds) {
+    if (b.hit) { b.vy += CFG.GRAVITY * dt; b.y += b.vy * dt; b.x += b.vx * 0.3 * dt; continue; }
+    b.x += b.vx * dt;
+    b.y = b.by + Math.sin(b.ph + G.t * 3) * b.amp;
+  }
+  // אנימציית בננות + מגנט
+  const P = G.player, mag = G.power.magnet > 0;
+  for (const b of G.bananas) {
+    if (b.taken) continue;
+    if (mag) {
+      const dx = P.x - b.x, dy = P.y - b.y, dd = Math.hypot(dx, dy);
+      if (dd < CFG.MAGNET_R && dd > 1) {
+        const k = (1 - dd / CFG.MAGNET_R) * 1400 + 300;
+        b.x += dx / dd * k * dt; b.y += dy / dd * k * dt;
+      }
+    }
+  }
+}
+
+function collisions(P, dt) {
+  const r = CFG.PLAYER_R;
+  for (const b of G.bananas) {
+    if (b.taken) continue;
+    const dx = b.x - P.x, dy = b.y - P.y;
+    if (dx * dx + dy * dy < (r + 20) * (r + 20)) collectBanana(b);
+  }
+  for (const u of G.powerups) {
+    if (u.taken) continue;
+    const dx = u.x - P.x, dy = u.y - P.y;
+    if (dx * dx + dy * dy < (r + 24) * (r + 24)) collectPower(u);
+  }
+  if (P.dead) return;
+  for (const s of G.spikes) {
+    const dx = s.x - P.x, dy = s.y - P.y, rr = r + s.r * 0.78;
+    if (dx * dx + dy * dy < rr * rr) { hitBy(s.x, s.y, 'spike'); break; }
+  }
+  for (const b of G.birds) {
+    if (b.hit) continue;
+    const dx = b.x - P.x, dy = b.y - P.y, rr = r + 15;
+    if (dx * dx + dy * dy < rr * rr) { hitBy(b.x, b.y, 'bird', b); break; }
+  }
+}
+
+function collectBanana(b) {
+  b.taken = true;
+  const pts = (b.gold ? 100 : 10) * G.mult;
+  G.bananaPts += pts; G.bananaCount += b.gold ? 5 : 1;
+  addPop(b.x, b.y - 20, '+' + pts, b.gold ? '#fff2a8' : '#ffe066', b.gold ? 34 : 24);
+  burst(b.x, b.y, b.gold ? 22 : 10, { type: 'spark', color: b.gold ? '#fff3b0' : '#ffd84d', spd: [120, b.gold ? 420 : 300], life: [0.25, 0.55], size: [2, 3], g: 200, drag: 2.5 });
+  ring(b.x, b.y, b.gold ? '#fff3b0' : '#ffe066', b.gold ? 70 : 40);
+  if (b.gold) { Sound.fx.golden(); shake(0.15); G.flash = 0.5; G.flashColor = '255,236,160'; }
+  else Sound.fx.banana(Math.min(G.combo, 6));
+  $('score').animate([{ transform: 'scale(1.25)' }, { transform: 'scale(1)' }], { duration: 230, easing: 'cubic-bezier(.2,.9,.3,1.3)' });
+}
+
+function collectPower(u) {
+  u.taken = true;
+  const names = { magnet: 'מגנט! 🧲', shield: 'מגן! 🛡️', slow: 'האטת זמן! ⏳' };
+  const colors = { magnet: '#ff7b7b', shield: '#7fdcff', slow: '#c59bff' };
+  if (u.kind === 'magnet') G.power.magnet = CFG.MAGNET_TIME;
+  if (u.kind === 'shield') G.power.shield = CFG.SHIELD_TIME;
+  if (u.kind === 'slow') { G.power.slow = CFG.SLOW_TIME; Sound.slow(true); }
+  addPop(u.x, u.y - 30, names[u.kind], colors[u.kind], 30);
+  burst(u.x, u.y, 18, { type: 'spark', color: colors[u.kind], spd: [100, 360], life: [0.3, 0.7], size: [2, 3], g: 0, drag: 2 });
+  ring(u.x, u.y, colors[u.kind], 80);
+  Sound.fx.power(); G.flash = 0.35; G.flashColor = '255,255,255';
+}
+
+function hitBy(ox, oy, kind, bird) {
+  const P = G.player;
+  if (P.invuln > 0) return;
+  if (bird) { bird.hit = true; bird.vy = -200; feathers(bird); }
+  if (G.power.shield > 0) {
+    // המגן סופג פגיעה אחת
+    G.power.shield = 0; P.invuln = 1.2;
+    const dx = P.x - ox, dy = P.y - oy, d = Math.hypot(dx, dy) || 1;
+    if (P.attached) release();
+    P.vx = dx / d * 650; P.vy = dy / d * 650 - 250;
+    Sound.fx.shield(); shake(0.45);
+    ring(P.x, P.y, '#7fdcff', 90);
+    addPop(P.x, P.y - 60, 'המגן נשבר!', '#7fdcff', 28);
+    return;
+  }
+  die(kind);
+}
+
+function die(reason) {
+  const P = G.player;
+  if (P.dead) return;
+  P.dead = true; G.deathBy = reason;
+  if (P.attached) release();
+  state = 'dying'; G.dyingT = reason === 'water' ? 1.1 : 1.4;
+  $('btn-pause').classList.remove('show');
+  if (reason === 'water') {
+    splash(P.x, CFG.WATER_Y, 1); Sound.fx.splash(); shake(0.35);
+    P.vy = Math.min(P.vy, 200);
+  } else {
+    Sound.fx.hit(); shake(0.85); G.flash = 0.8; G.flashColor = '255,90,70';
+    P.vx *= -0.25; P.vy = -650; P.spin = (Math.random() < 0.5 ? -1 : 1) * 14;
+    burst(P.x, P.y, 16, { type: 'spark', color: '#ffb36b', spd: [150, 420], life: [0.3, 0.6], size: [2, 3], g: 300, drag: 2 });
+  }
+  Sound.music(0.12);
+}
+
+/* ===================== חבל חי (Verlet) ===================== */
+function createRope(peg) {
+  const P = G.player, n = CFG.ROPE_SEGS;
+  if (G.rope) G.rope.attached = false;
+  const r = { peg, attached: true, alpha: 1, len: Math.max(4, P.L - CFG.HAND_OFFSET), pts: [], shoot: 0, wob: 0, seed: Math.random() * 10 };
+  for (let i = 0; i < n; i++) {
+    const t = i / (n - 1), x = lerp(peg.x, P.hx, t), y = lerp(peg.y, P.hy, t);
+    r.pts.push({ x, y, ox: x, oy: y });
+  }
+  G.ropes.push(r); G.rope = r;
+  if (G.ropes.length > 4) G.ropes.shift();
+}
+
+function updateRopes(dt) {
+  const P = G.player, g = CFG.GRAVITY * dt * dt;
+  for (let k = G.ropes.length - 1; k >= 0; k--) {
+    const r = G.ropes[k], pts = r.pts, n = pts.length;
+    r.shoot = Math.min(1, r.shoot + dt / CFG.ROPE_SHOOT_TIME);
+    r.wob *= Math.exp(-5 * dt);
+    if (!r.attached) { r.alpha -= dt * 1.25; if (r.alpha <= 0) { G.ropes.splice(k, 1); continue; } }
+    for (let i = 1; i < n; i++) {
+      if (r.attached && i === n - 1) continue;
+      const p = pts[i], vx = (p.x - p.ox) * 0.985, vy = (p.y - p.oy) * 0.985;
+      p.ox = p.x; p.oy = p.y; p.x += vx; p.y += vy + g;
+    }
+    pts[0].x = r.peg.x; pts[0].y = r.peg.y;
+    if (r.attached) { const e = pts[n - 1]; e.ox = e.x; e.oy = e.y; e.x = P.hx; e.y = P.hy; }
+    const rest = r.len / (n - 1);
+    for (let it = 0; it < 4; it++) {
+      for (let i = 0; i < n - 1; i++) {
+        const a = pts[i], b = pts[i + 1];
+        const dx = b.x - a.x, dy = b.y - a.y, d = Math.sqrt(dx * dx + dy * dy) || 1e-4;
+        if (!r.attached && d <= rest) continue;      // חבל משוחרר — רק נמתח, לא נדחס (נרפה)
+        const diff = (d - rest) / d;
+        const aPin = i === 0, bPin = r.attached && i + 1 === n - 1;
+        if (aPin && bPin) continue;
+        if (aPin) { b.x -= dx * diff; b.y -= dy * diff; }
+        else if (bPin) { a.x += dx * diff; a.y += dy * diff; }
+        else { a.x += dx * diff * 0.5; a.y += dy * diff * 0.5; b.x -= dx * diff * 0.5; b.y -= dy * diff * 0.5; }
+      }
+    }
+  }
+}
+
+/* ===================== חלקיקים ===================== */
+function addPart(o) {
+  if (G.parts.length >= CFG.MAX_PARTICLES) G.parts.shift();
+  G.parts.push(o);
+}
+function burst(x, y, n, o) {
+  for (let i = 0; i < n; i++) {
+    const a = Math.random() * TAU, s = rand(o.spd[0], o.spd[1]), life = rand(o.life[0], o.life[1]);
+    addPart({ type: o.type, x, y, vx: Math.cos(a) * s, vy: Math.sin(a) * s, life, max: life, size: rand(o.size[0], o.size[1]), color: o.color, g: o.g, drag: o.drag, rot: Math.random() * TAU, vr: rand(-8, 8) });
+  }
+}
+function leaf(x, y) {
+  addPart({ type: 'leaf', x, y, vx: rand(-60, 60), vy: rand(-80, 0), life: 2.2, max: 2.2, size: rand(5, 8), color: pick(['#6fbf4a', '#a7c94a', '#4f9a3c', '#d9b44a']), g: 120, drag: 2.2, rot: Math.random() * TAU, vr: rand(-4, 4), seed: Math.random() * 10 });
+}
+function ring(x, y, color, size) {
+  addPart({ type: 'ring', x, y, vx: 0, vy: 0, life: 0.45, max: 0.45, size, color, g: 0, drag: 0, rot: 0, vr: 0 });
+}
+function splash(x, y, k) {
+  for (let i = 0; i < 26 * k; i++) {
+    const a = -Math.PI / 2 + rand(-0.9, 0.9), s = rand(200, 650) * k;
+    addPart({ type: 'dot', x: x + rand(-15, 15), y, vx: Math.cos(a) * s, vy: Math.sin(a) * s, life: rand(0.5, 1), max: 1, size: rand(3, 7), color: pick(['#bff3ff', '#7fd6e8', '#ffffff']), g: 1500, drag: 0.5, rot: 0, vr: 0 });
+  }
+  ring(x, y, '#bff3ff', 70);
+}
+function feathers(b) {
+  burst(b.x, b.y, 10, { type: 'leaf', color: b.color, spd: [60, 220], life: [0.8, 1.4], size: [4, 7], g: 160, drag: 2.5 });
+}
+function addPop(x, y, text, color, size) { G.pops.push({ x, y, text, color, size, t: 0, life: 1.1 }); }
+function shake(a) { G.cam.trauma = Math.min(1, G.cam.trauma + a); }
+
+function updateParticles(dt) {
+  const ps = G.parts;
+  for (let i = ps.length - 1; i >= 0; i--) {
+    const p = ps[i];
+    p.life -= dt;
+    if (p.life <= 0) { ps[i] = ps[ps.length - 1]; ps.pop(); continue; }
+    const dr = 1 - p.drag * dt;
+    p.vx *= dr; p.vy *= dr; p.vy += p.g * dt;
+    if (p.type === 'leaf') p.vx += Math.sin(G.t * 3 + (p.seed || 0)) * 60 * dt;
+    p.x += p.vx * dt; p.y += p.vy * dt; p.rot += p.vr * dt;
+  }
+  for (let i = G.pops.length - 1; i >= 0; i--) {
+    const q = G.pops[i]; q.t += dt; q.y -= 40 * dt;
+    if (q.t >= q.life) G.pops.splice(i, 1);
+  }
+}
+
+// עלים נופלים ברקע (מרחב מסך)
+const ambient = [];
+function initAmbient() {
+  ambient.length = 0;
+  for (let i = 0; i < 14; i++) ambient.push(newAmbientLeaf(true));
+}
+function newAmbientLeaf(anywhere) {
+  return {
+    x: Math.random() * (W || 800), y: anywhere ? Math.random() * (H || 400) : -20,
+    vy: rand(18, 45), sway: rand(20, 50), ph: Math.random() * TAU, rot: Math.random() * TAU, vr: rand(-1.5, 1.5),
+    size: rand(4, 9), depth: rand(0.3, 1.1), color: pick(['#7bc152', '#b3cf4f', '#5ea548', '#e0b84c', '#c98d3a']),
+  };
+}
+function updateAmbient(dt, camDX) {
+  for (const l of ambient) {
+    l.y += l.vy * dt; l.ph += dt * 1.6; l.rot += l.vr * dt;
+    l.x += Math.sin(l.ph) * l.sway * dt - camDX * baseScale * l.depth;
+    if (l.y > H + 20) Object.assign(l, newAmbientLeaf(false));
+    if (l.x < -30) l.x += W + 60; else if (l.x > W + 30) l.x -= W + 60;
+  }
+}
+
+/* ===================== לולאת פריים: מצלמה, אנימציה, HUD ===================== */
+let lastHud = { score: -1, ban: -1, mult: -1 };
+function updateFrame(fdt, alpha) {
+  const P = G.player, cam = G.cam, sdt = fdt * G.timeScale;
+  const ix = lerp(P.px, P.x, alpha), iy = lerp(P.py, P.y, alpha);
+  const speed = Math.hypot(P.vx, P.vy);
+
+  // --- מצלמה חלקה עם look-ahead וזום-אאוט במהירות ---
+  const zoomT = 1 - CFG.ZOOM_OUT_MAX * clamp((speed - 450) / 800, 0, 1);
+  cam.zoom += (zoomT - cam.zoom) * (1 - Math.exp(-2.2 * fdt));
+  const sc = baseScale * cam.zoom, viewH = H / sc, viewW = W / sc;
+  const look = clamp(P.vx * CFG.LOOKAHEAD, -120, 330);
+  const tx = ix + look + viewW * 0.12;
+  const ty = Math.min(CFG.WATER_Y + 70 - viewH / 2, iy + 110);
+  const oldX = cam.x;
+  cam.x += (tx - cam.x) * (1 - Math.exp(-CFG.CAM_LERP_X * fdt));
+  cam.y += (ty - cam.y) * (1 - Math.exp(-CFG.CAM_LERP_Y * fdt));
+  cam.trauma = Math.max(0, cam.trauma - fdt * 1.6);
+  updateAmbient(fdt, cam.x - oldX);
+
+  // --- אנימציית גורילה לפי הפיזיקה ---
+  if (P.attached) {
+    const a = P.attached;
+    const target = Math.atan2(a.x - ix, -(a.y - iy));      // ראש לכיוון נקודת האחיזה
+    P.rot += angDiff(P.rot, target) * (1 - Math.exp(-28 * sdt));
+    P.tuck += (0 - P.tuck) * (1 - Math.exp(-14 * sdt));
+    P.spin = 0;
+  } else {
+    // באוויר: גוף מכווץ וסיבוב לפי כיוון התנופה
+    P.tuck += (1 - P.tuck) * (1 - Math.exp(-10 * sdt));
+    const spinRate = P.dead ? P.spin : clamp(P.vx * 0.0042, -5, 5) * clamp(speed / 600, 0.2, 1);
+    P.rot += spinRate * sdt;
+    if (speed < 350 && !P.dead) P.rot += angDiff(P.rot, 0) * (1 - Math.exp(-3 * sdt));
+  }
+  P.squash *= Math.exp(-9 * sdt);
+  P.blink -= fdt; if (P.blink < -0.12) P.blink = rand(2, 4.5);
+
+  // שביל תנועה
+  if (speed > 420 && !P.dead) { G.trail.push(ix, iy); if (G.trail.length > 32) G.trail.splice(0, 2); }
+  else if (G.trail.length) G.trail.splice(0, 2);
+
+  updateParticles(sdt);
+  G.flash = Math.max(0, G.flash - fdt * 2.2);
+
+  // --- מוות ---
+  if (state === 'dying') { G.dyingT -= fdt; if (G.dyingT <= 0) gameOver(); }
+
+  // --- HUD (מתעדכן רק כשמשהו משתנה) ---
+  if (state === 'play' || state === 'dying') {
+    const dist = Math.max(0, Math.floor((G.maxX - CFG.START_X) / CFG.PX_PER_M));
+    G.score = dist + G.bananaPts; G.dist = dist;
+    if (G.score !== lastHud.score) { $('score').textContent = G.score; lastHud.score = G.score; }
+    if (G.bananaCount !== lastHud.ban) { $('bananas').textContent = '🍌 ' + G.bananaCount; lastHud.ban = G.bananaCount; }
+    if (G.mult !== lastHud.mult) {
+      const el = $('combo');
+      if (G.mult > 1) { el.innerHTML = 'x' + G.mult + '<small>קומבו</small>'; el.classList.add('show'); }
+      else el.classList.remove('show');
+      lastHud.mult = G.mult;
+    }
+    const maxes = { magnet: CFG.MAGNET_TIME, shield: CFG.SHIELD_TIME, slow: CFG.SLOW_TIME };
+    for (const k in maxes) {
+      const el = PILLS[k], v = G.power[k];
+      if (v > 0) { if (!el.on) { el.root.style.display = 'flex'; el.on = true; } el.bar.style.width = (v / maxes[k] * 100).toFixed(1) + '%'; }
+      else if (el.on) { el.root.style.display = 'none'; el.on = false; }
+    }
+  }
+}
+const PILLS = {};
+for (const k of ['magnet', 'shield', 'slow']) { const root = $('pw-' + k); PILLS[k] = { root, bar: root.querySelector('b'), on: false }; }
+
+/* =====================================================================
+   רינדור
+   ===================================================================== */
+function render(alpha) {
+  const P = G.player, cam = G.cam;
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over';
+  // שמיים + שכבות פרלקסה + ערפל
+  ctx.drawImage(BG.sky, 0, 0, cvs.width, cvs.height);
+  drawLayer(BG.mount, 0.05, 0.04);
+  drawLayer(BG.far, 0.16, 0.1);
+  ctx.globalAlpha = 0.75; ctx.drawImage(BG.fog, 0, 0, cvs.width, cvs.height); ctx.globalAlpha = 1;
+  drawLayer(BG.mid, 0.4, 0.25);
+  ctx.globalAlpha = 0.4; ctx.drawImage(BG.fog, 0, 0, cvs.width, cvs.height); ctx.globalAlpha = 1;
+
+  // --- עולם ---
+  const sc = baseScale * cam.zoom;
+  const tr = cam.trauma * cam.trauma;
+  const shx = tr * 18 * Math.sin(G.t * 71.3 + 1.7), shy = tr * 14 * Math.sin(G.t * 57.1);
+  ctx.setTransform(DPR * sc, 0, 0, DPR * sc, DPR * (W / 2 - cam.x * sc + shx), DPR * (H / 2 - cam.y * sc + shy));
+  const hw = W / 2 / sc, hh = H / 2 / sc;
+  const vl = cam.x - hw - 80, vr = cam.x + hw + 80, vt = cam.y - hh - 80, vb = cam.y + hh + 80;
+  const ix = lerp(P.px, P.x, alpha), iy = lerp(P.py, P.y, alpha);
+
+  drawTracks(vl, vr);
+  drawRopes(ix, iy);
+  drawPegs(vl, vr);
+  drawCollectibles(vl, vr, vt, vb);
+  drawSpikes(vl, vr);
+  drawBirds(vl, vr);
+  drawTrail();
+  drawPlayer(ix, iy);
+  drawParticles(vl, vr, vt, vb);
+  drawWater(vl, vr);
+  drawPops();
+
+  // --- חזית ---
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  drawLayer(BG.fore, 1.25, 0.5);
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  for (const l of ambient) {
+    ctx.save(); ctx.translate(l.x, l.y); ctx.rotate(l.rot);
+    ctx.fillStyle = l.color; ctx.globalAlpha = 0.55 + l.depth * 0.3;
+    ctx.beginPath(); ctx.ellipse(0, 0, l.size, l.size * 0.45, 0, 0, TAU); ctx.fill();
+    ctx.restore();
+  }
+  ctx.globalAlpha = 1;
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.drawImage(BG.vig, 0, 0, cvs.width, cvs.height);
+  if (G.power.slow > 0) {
+    ctx.globalAlpha = 0.14 * Math.min(1, G.power.slow * 2);
+    ctx.fillStyle = '#7b4dff'; ctx.fillRect(0, 0, cvs.width, cvs.height);
+  }
+  if (G.flash > 0) {
+    ctx.globalAlpha = Math.min(0.5, G.flash * 0.45);
+    ctx.fillStyle = 'rgb(' + G.flashColor + ')'; ctx.fillRect(0, 0, cvs.width, cvs.height);
+  }
+  ctx.globalAlpha = 1;
+}
+
+function drawLayer(L, f, vf) {
+  const c = G.cam;
+  let ox = -((c.x * baseScale * f) % L.w);
+  if (ox > 0) ox -= L.w;
+  const oy = clamp(-(c.y - 380) * baseScale * vf, -L.m, L.m) - L.m;
+  const dy = Math.round(oy * DPR), dh = Math.ceil(L.h * DPR), dw = Math.ceil(L.w * DPR) + 1;
+  for (let x = ox; x < W; x += L.w) ctx.drawImage(L.c, Math.floor(x * DPR), dy, dw, dh);
+}
+
+function drawTracks(vl, vr) {
+  ctx.lineWidth = 3; ctx.setLineDash([6, 10]); ctx.strokeStyle = 'rgba(255,240,210,0.28)';
+  ctx.beginPath();
+  for (const p of G.pegs) {
+    if (p.type !== 'move' || p.broken || p.bx + p.amp < vl || p.bx - p.amp > vr) continue;
+    ctx.moveTo(p.bx - p.ax * p.amp, p.by - p.ay * p.amp);
+    ctx.lineTo(p.bx + p.ax * p.amp, p.by + p.ay * p.amp);
+  }
+  ctx.stroke(); ctx.setLineDash([]);
+}
+
+function drawRopes(ix, iy) {
+  ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+  const P = G.player;
+  for (const r of G.ropes) {
+    const pts = r.pts, n = pts.length;
+    ctx.globalAlpha = Math.max(0, r.alpha);
+    // קצה הידיים לפי המיקום המוצג (אינטרפולציה)
+    let ex = pts[n - 1].x, ey = pts[n - 1].y;
+    if (r.attached) {
+      const a = r.peg, dx = a.x - ix, dy = a.y - iy, d = Math.hypot(dx, dy) || 1;
+      ex = ix + dx / d * CFG.HAND_OFFSET; ey = iy + dy / d * CFG.HAND_OFFSET;
+    }
+    ctx.beginPath();
+    if (r.shoot < 1) {
+      // החבל "נורה" מהיד אל הנקודה
+      ctx.moveTo(ex, ey);
+      ctx.lineTo(lerp(ex, r.peg.x, r.shoot), lerp(ey, r.peg.y, r.shoot));
+    } else {
+      // רטט עדין לאורך החבל
+      const ax = r.peg.x, ay = r.peg.y, ddx = ex - ax, ddy = ey - ay, dl = Math.hypot(ddx, ddy) || 1;
+      const nx = -ddy / dl, ny = ddx / dl, wob = r.wob * Math.sin(G.t * 42 + r.seed);
+      let px = ax, py = ay;
+      ctx.moveTo(px, py);
+      for (let i = 1; i < n; i++) {
+        const t = i / (n - 1), w = Math.sin(t * Math.PI) * wob;
+        let x = pts[i].x + nx * w, y = pts[i].y + ny * w;
+        if (i === n - 1) { x = ex; y = ey; }
+        ctx.quadraticCurveTo(px, py, (px + x) / 2, (py + y) / 2);
+        px = x; py = y;
+      }
+      ctx.lineTo(px, py);
+    }
+    ctx.strokeStyle = '#4a2c14'; ctx.lineWidth = 6; ctx.stroke();
+    ctx.strokeStyle = '#b88347'; ctx.lineWidth = 2.4; ctx.stroke();
+  }
+  ctx.globalAlpha = 1;
+}
+
+function drawPegs(vl, vr) {
+  const near = G.nearPeg, P = G.player;
+  for (const p of G.pegs) {
+    if (p.x < vl || p.x > vr) continue;
+    let x = p.x, y = p.y;
+    if (p.breakT > 0 && p.breakT < p.breakMax * 0.6) { const k = 1 - p.breakT / p.breakMax; x += rand(-2, 2) * k * 2; y += rand(-2, 2) * k * 2; }
+    const spr = p.type === 'break' ? SPR.pegBreak : p.type === 'move' ? SPR.pegMove : SPR.peg;
+    const s = 56 * (1 + p.pulse * 0.25);
+    if (p.broken) {
+      ctx.save(); ctx.translate(x, y); ctx.rotate(p.rot); ctx.globalAlpha = 0.85;
+      ctx.drawImage(spr, -s / 2, -s / 2, s, s); ctx.restore(); ctx.globalAlpha = 1;
+      continue;
+    }
+    ctx.drawImage(spr, x - s / 2, y - s / 2, s, s);
+    // טיימר שבירה
+    if (p.breakT > 0) {
+      ctx.strokeStyle = '#ff5a3c'; ctx.lineWidth = 4;
+      ctx.beginPath(); ctx.arc(x, y, 21, -Math.PI / 2, -Math.PI / 2 + TAU * (p.breakT / p.breakMax)); ctx.stroke();
+    }
+    // הדגשת נקודת האחיזה שתיתפס (snap)
+    if (p === near && !P.dead) {
+      const pulse = 1 + Math.sin(G.t * 10) * 0.12;
+      ctx.strokeStyle = 'rgba(255,255,255,0.85)'; ctx.lineWidth = 3;
+      ctx.beginPath(); ctx.arc(x, y, 25 * pulse, 0, TAU); ctx.stroke();
+      ctx.strokeStyle = 'rgba(255,210,120,0.35)'; ctx.lineWidth = 8;
+      ctx.beginPath(); ctx.arc(x, y, 30 * pulse, 0, TAU); ctx.stroke();
+    }
+  }
+}
+
+function drawCollectibles(vl, vr, vt, vb) {
+  const t = G.t;
+  for (const b of G.bananas) {
+    if (b.taken || b.x < vl || b.x > vr || b.y < vt || b.y > vb) continue;
+    const bob = Math.sin(t * 3 + b.ph) * 4, s = b.gold ? 84 : 64;
+    ctx.save(); ctx.translate(b.x, b.y + bob); ctx.rotate(Math.sin(t * 2 + b.ph) * 0.15);
+    ctx.drawImage(b.gold ? SPR.gold : SPR.banana, -s / 2, -s / 2, s, s);
+    ctx.restore();
+  }
+  for (const u of G.powerups) {
+    if (u.taken || u.x < vl || u.x > vr) continue;
+    const bob = Math.sin(t * 2.5 + u.ph) * 6, s = 78 * (1 + Math.sin(t * 5 + u.ph) * 0.05);
+    ctx.drawImage(SPR[u.kind], u.x - s / 2, u.y + bob - s / 2, s, s);
+  }
+}
+
+function drawSpikes(vl, vr) {
+  for (const s of G.spikes) {
+    if (s.x < vl - 40 || s.x > vr + 40) continue;
+    const sz = s.r * 3.2;
+    ctx.save(); ctx.translate(s.x, s.y); ctx.rotate(s.rot);
+    ctx.drawImage(SPR.spike, -sz / 2, -sz / 2, sz, sz);
+    ctx.restore();
+  }
+}
+
+function drawBirds(vl, vr) {
+  for (const b of G.birds) {
+    if (b.x < vl || b.x > vr) continue;
+    const flap = Math.sin(G.t * 16 + b.ph);
+    ctx.save(); ctx.translate(b.x, b.y);
+    if (b.hit) ctx.rotate(G.t * 8);
+    // זנב
+    ctx.fillStyle = '#2b3a67';
+    ctx.beginPath(); ctx.moveTo(12, -2); ctx.lineTo(28, -8); ctx.lineTo(26, 4); ctx.closePath(); ctx.fill();
+    // כנף אחורית
+    ctx.fillStyle = shade(b.color, -40);
+    ctx.beginPath(); ctx.moveTo(4, -4); ctx.quadraticCurveTo(10, -4 - 22 * flap, 18, -2 - 26 * flap); ctx.lineTo(10, 2); ctx.closePath(); ctx.fill();
+    // גוף
+    ctx.fillStyle = b.color;
+    ctx.beginPath(); ctx.ellipse(0, 0, 16, 10, -0.1, 0, TAU); ctx.fill();
+    ctx.beginPath(); ctx.arc(-13, -4, 8, 0, TAU); ctx.fill();
+    // מקור
+    ctx.fillStyle = '#ffc93c';
+    ctx.beginPath(); ctx.moveTo(-19, -6); ctx.lineTo(-31, -1); ctx.lineTo(-19, 0); ctx.closePath(); ctx.fill();
+    // עין
+    ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(-15, -6, 2.8, 0, TAU); ctx.fill();
+    ctx.fillStyle = '#111'; ctx.beginPath(); ctx.arc(-15.6, -6, 1.4, 0, TAU); ctx.fill();
+    // כנף קדמית
+    ctx.fillStyle = shade(b.color, 30);
+    ctx.beginPath(); ctx.moveTo(-2, -3); ctx.quadraticCurveTo(4, -6 - 26 * flap, 14, -4 - 30 * flap); ctx.lineTo(8, 3); ctx.closePath(); ctx.fill();
+    ctx.restore();
+  }
+}
+function shade(hex, amt) {
+  const n = parseInt(hex.slice(1), 16);
+  const r = clamp((n >> 16) + amt, 0, 255), g = clamp(((n >> 8) & 255) + amt, 0, 255), b = clamp((n & 255) + amt, 0, 255);
+  return 'rgb(' + r + ',' + g + ',' + b + ')';
+}
+
+function drawTrail() {
+  const tr = G.trail, n = tr.length / 2;
+  if (n < 2) return;
+  ctx.globalCompositeOperation = 'lighter'; ctx.lineCap = 'round';
+  for (let i = 1; i < n; i++) {
+    const k = i / n;
+    ctx.strokeStyle = 'rgba(255,200,120,' + (k * 0.35).toFixed(3) + ')';
+    ctx.lineWidth = 4 + k * 18;
+    ctx.beginPath(); ctx.moveTo(tr[i * 2 - 2], tr[i * 2 - 1]); ctx.lineTo(tr[i * 2], tr[i * 2 + 1]); ctx.stroke();
+  }
+  ctx.globalCompositeOperation = 'source-over';
+}
+
+function drawPlayer(x, y) {
+  const P = G.player;
+  if (P.invuln > 0 && ((P.invuln * 14) | 0) % 2 === 0) ctx.globalAlpha = 0.45;
+  // מגן
+  if (G.power.shield > 0 && !(G.power.shield < 2 && ((G.t * 8) | 0) % 2)) {
+    const s = 100 + Math.sin(G.t * 6) * 4;
+    ctx.drawImage(SPR.bubble, x - s / 2, y - s / 2, s, s);
+  }
+  // מגנט — טבעת עדינה
+  if (G.power.magnet > 0) {
+    ctx.strokeStyle = 'rgba(255,123,123,0.18)'; ctx.lineWidth = 3; ctx.setLineDash([10, 14]);
+    ctx.lineDashOffset = -G.t * 60;
+    ctx.beginPath(); ctx.arc(x, y, 60 + Math.sin(G.t * 4) * 6, 0, TAU); ctx.stroke(); ctx.setLineDash([]);
+  }
+  // כיוון המבט — לפי המהירות, במערכת הצירים של הגורילה
+  const sp = Math.hypot(P.vx, P.vy) || 1, c = Math.cos(-P.rot), s = Math.sin(-P.rot);
+  const lx = P.vx / sp, ly = P.vy / sp;
+  drawGorilla(x, y, P.rot, P.tuck, lx * c - ly * s, lx * s + ly * c, P.blink < 0, P.squash, !!P.attached, P.dead);
+  ctx.globalAlpha = 1;
+}
+
+// גורילה פרוצדורלית: זרועות לחבל, גוף מכווץ באוויר
+function drawGorilla(x, y, rot, tuck, lookX, lookY, blink, squash, attached, dead) {
+  const c = ctx, t = G.t;
+  const fur = '#3a2a23', furHi = '#6a4c3a', skin = '#2a1c17', face = '#c4976f';
+  c.save(); c.translate(x, y); c.rotate(rot);
+  c.scale(1 + squash * 0.14, 1 - squash * 0.14);
+  c.lineCap = 'round';
+  const armUp = 1 - tuck;
+  // רגליים
+  const sw = Math.sin(t * 5) * 2.5 * armUp;
+  c.strokeStyle = fur; c.lineWidth = 9;
+  for (const s of [-1, 1]) {
+    const fx = s * lerp(9, 15, tuck) + sw, fy = lerp(33, 21, tuck);
+    c.beginPath(); c.moveTo(s * 8, 14);
+    c.quadraticCurveTo(s * lerp(13, 22, tuck), lerp(23, 15, tuck), fx, fy); c.stroke();
+    c.fillStyle = skin; c.beginPath(); c.ellipse(fx, fy + 2, 5.5, 3.6, 0, 0, TAU); c.fill();
+  }
+  // גוף
+  const g = c.createRadialGradient(-6, -2, 2, 0, 6, 22);
+  g.addColorStop(0, furHi); g.addColorStop(1, fur);
+  c.fillStyle = g;
+  c.beginPath(); c.ellipse(0, 6, 17, 18, 0, 0, TAU); c.fill();
+  c.fillStyle = '#8b6a55';
+  c.beginPath(); c.ellipse(0, 9, 10, 11, 0, 0, TAU); c.fill();
+  // זרועות: אל החבל כשנתפסים, פרושות/מכווצות באוויר
+  c.strokeStyle = fur; c.lineWidth = 9.5;
+  for (const s of [-1, 1]) {
+    const hxA = s * 3.5, hyA = -CFG.HAND_OFFSET;
+    const hxF = s * lerp(24, 19, tuck * 0.5), hyF = dead ? -14 : lerp(-6, 4, tuck);
+    const hx = lerp(hxF, hxA, armUp), hy = lerp(hyF, hyA, armUp);
+    const cx = s * lerp(22, 17, armUp), cy = lerp(-10, -16, armUp);
+    c.beginPath(); c.moveTo(s * 12, -3); c.quadraticCurveTo(cx, cy, hx, hy); c.stroke();
+    c.fillStyle = skin; c.beginPath(); c.arc(hx, hy, 5.2, 0, TAU); c.fill();
+  }
+  // אוזניים + ראש
+  c.fillStyle = face;
+  c.beginPath(); c.arc(-11.5, -12, 3.6, 0, TAU); c.arc(11.5, -12, 3.6, 0, TAU); c.fill();
+  const hg = c.createRadialGradient(-4, -17, 1, 0, -12, 14);
+  hg.addColorStop(0, furHi); hg.addColorStop(1, fur);
+  c.fillStyle = hg;
+  c.beginPath(); c.arc(0, -12, 12.5, 0, TAU); c.fill();
+  // פנים
+  c.fillStyle = face;
+  c.beginPath(); c.ellipse(0, -10, 8.8, 7.2, 0, 0, TAU); c.fill();
+  c.fillStyle = '#d9ad87';
+  c.beginPath(); c.ellipse(0, -6.5, 6.5, 4.2, 0, 0, TAU); c.fill();
+  c.fillStyle = '#2c1f1a';
+  c.beginPath(); c.ellipse(0, -15.5, 9.5, 3.2, 0, 0, TAU); c.fill();
+  // עיניים
+  if (dead) {
+    c.strokeStyle = '#1a100c'; c.lineWidth = 1.6;
+    for (const s of [-1, 1]) { c.beginPath(); c.moveTo(s * 4 - 2, -14); c.lineTo(s * 4 + 2, -10); c.moveTo(s * 4 + 2, -14); c.lineTo(s * 4 - 2, -10); c.stroke(); }
+  } else if (blink) {
+    c.strokeStyle = '#1a100c'; c.lineWidth = 1.6;
+    c.beginPath(); c.moveTo(-6.5, -12); c.lineTo(-1.5, -12); c.moveTo(1.5, -12); c.lineTo(6.5, -12); c.stroke();
+  } else {
+    c.fillStyle = '#fff';
+    c.beginPath(); c.arc(-4, -12, 2.7, 0, TAU); c.arc(4, -12, 2.7, 0, TAU); c.fill();
+    c.fillStyle = '#1a100c';
+    c.beginPath(); c.arc(-4 + lookX * 1.2, -12 + lookY * 1.2, 1.5, 0, TAU); c.arc(4 + lookX * 1.2, -12 + lookY * 1.2, 1.5, 0, TAU); c.fill();
+  }
+  // נחיריים + פה
+  c.fillStyle = '#4a2f22';
+  c.beginPath(); c.arc(-1.8, -7.5, 1, 0, TAU); c.arc(1.8, -7.5, 1, 0, TAU); c.fill();
+  c.strokeStyle = '#4a2f22'; c.lineWidth = 1.3;
+  c.beginPath();
+  if (tuck > 0.5 && !dead) c.arc(0, -4, 2.2, 0, TAU);        // "וואו" באוויר
+  else c.arc(0, -5.5, 2.6, 0.2, Math.PI - 0.2);
+  c.stroke();
+  c.restore();
+}
+
+function drawParticles(vl, vr, vt, vb) {
+  const ps = G.parts;
+  // שני מעברים: רגיל ואז תוסף (glow)
+  for (let pass = 0; pass < 2; pass++) {
+    if (pass === 1) ctx.globalCompositeOperation = 'lighter';
+    for (const p of ps) {
+      const add = p.type === 'spark' || p.type === 'ring';
+      if ((pass === 1) !== add) continue;
+      if (p.x < vl || p.x > vr || p.y < vt || p.y > vb) continue;
+      const k = p.life / p.max;
+      ctx.globalAlpha = Math.min(1, k * 1.4);
+      if (p.type === 'dot') {
+        ctx.fillStyle = p.color; ctx.beginPath(); ctx.arc(p.x, p.y, p.size * (0.5 + k * 0.5), 0, TAU); ctx.fill();
+      } else if (p.type === 'spark') {
+        ctx.strokeStyle = p.color; ctx.lineWidth = p.size; ctx.lineCap = 'round';
+        ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(p.x - p.vx * 0.04, p.y - p.vy * 0.04); ctx.stroke();
+      } else if (p.type === 'ring') {
+        ctx.strokeStyle = p.color; ctx.lineWidth = 5 * k;
+        ctx.beginPath(); ctx.arc(p.x, p.y, p.size * (1 - k * 0.7), 0, TAU); ctx.stroke();
+      } else if (p.type === 'leaf') {
+        ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.rot); ctx.fillStyle = p.color;
+        ctx.beginPath(); ctx.ellipse(0, 0, p.size, p.size * 0.45, 0, 0, TAU); ctx.fill(); ctx.restore();
+      } else if (p.type === 'chip') {
+        ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.rot); ctx.fillStyle = p.color;
+        ctx.fillRect(-p.size, -p.size * 0.4, p.size * 2, p.size * 0.8); ctx.restore();
+      }
+    }
+  }
+  ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = 1;
+}
+
+function drawWater(vl, vr) {
+  const y0 = CFG.WATER_Y, t = G.t;
+  // ערפל מעל המים
+  const mg = ctx.createLinearGradient(0, y0 - 120, 0, y0);
+  mg.addColorStop(0, 'rgba(255,235,210,0)'); mg.addColorStop(1, 'rgba(230,245,240,0.28)');
+  ctx.fillStyle = mg; ctx.fillRect(vl, y0 - 120, vr - vl, 120);
+  // גוף המים
+  const wg = ctx.createLinearGradient(0, y0, 0, y0 + 420);
+  wg.addColorStop(0, '#2a8a8f'); wg.addColorStop(0.35, '#16535e'); wg.addColorStop(1, '#082a30');
+  ctx.fillStyle = wg;
+  ctx.beginPath(); ctx.moveTo(vl, y0 + 900);
+  const step = 30, x0 = Math.floor(vl / step) * step;
+  for (let x = x0; x <= vr + step; x += step) ctx.lineTo(x, y0 + Math.sin(x * 0.02 + t * 2) * 4 + Math.sin(x * 0.051 - t * 1.3) * 2.5);
+  ctx.lineTo(vr + step, y0 + 900); ctx.closePath(); ctx.fill();
+  // קו הבהוב על פני המים
+  ctx.strokeStyle = 'rgba(220,255,250,0.55)'; ctx.lineWidth = 3;
+  ctx.beginPath();
+  for (let x = x0; x <= vr + step; x += step) {
+    const y = y0 + Math.sin(x * 0.02 + t * 2) * 4 + Math.sin(x * 0.051 - t * 1.3) * 2.5;
+    if (x === x0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+  }
+  ctx.stroke();
+  // ניצוצות שמש במים
+  ctx.fillStyle = 'rgba(255,230,170,0.35)';
+  for (let x = Math.floor(vl / 90) * 90; x < vr; x += 90) {
+    const k = Math.sin(x * 12.9898) * 43758.5453, f = k - Math.floor(k);
+    const w = 20 + f * 40, yy = y0 + 18 + f * 60, a = Math.sin(t * 2 + f * 20);
+    if (a > 0.2) ctx.fillRect(x + Math.sin(t + f * 10) * 10, yy, w * a, 2.5);
+  }
+}
+
+function drawPops() {
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.direction = 'ltr';
+  for (const q of G.pops) {
+    const k = q.t / q.life;
+    const s = q.t < 0.18 ? easeOutBack(q.t / 0.18) : 1;
+    ctx.globalAlpha = k > 0.65 ? (1 - k) / 0.35 : 1;
+    ctx.save(); ctx.translate(q.x, q.y); ctx.scale(s, s);
+    ctx.font = '900 ' + q.size + "px Rubik, system-ui, sans-serif";
+    ctx.lineWidth = 6; ctx.strokeStyle = 'rgba(40,20,5,0.75)'; ctx.strokeText(q.text, 0, 0);
+    ctx.fillStyle = q.color; ctx.fillText(q.text, 0, 0);
+    ctx.restore();
+  }
+  ctx.globalAlpha = 1;
+}
+
+/* =====================================================================
+   רקע: שכבות מרונדרות מראש (פעם אחת בשינוי גודל) — חסכוני לנייד
+   ===================================================================== */
+function makeCanvas(w, h) { const c = document.createElement('canvas'); c.width = Math.max(1, Math.ceil(w)); c.height = Math.max(1, Math.ceil(h)); return c; }
+
+function buildBackground() {
+  const R = BGR;
+  // --- שמיים חמים + שמש + קרני אור ---
+  {
+    const c = makeCanvas(W * R, H * R), g = c.getContext('2d'); g.scale(R, R);
+    const sg = g.createLinearGradient(0, 0, 0, H);
+    sg.addColorStop(0, '#213d63'); sg.addColorStop(0.35, '#a8668a'); sg.addColorStop(0.62, '#f29a6b'); sg.addColorStop(0.85, '#ffcf8a'); sg.addColorStop(1, '#ffe3a8');
+    g.fillStyle = sg; g.fillRect(0, 0, W, H);
+    const sx = W * 0.7, sy = H * 0.5;
+    const glow = g.createRadialGradient(sx, sy, 0, sx, sy, H * 0.9);
+    glow.addColorStop(0, 'rgba(255,240,190,0.9)'); glow.addColorStop(0.15, 'rgba(255,210,140,0.45)'); glow.addColorStop(1, 'rgba(255,170,110,0)');
+    g.fillStyle = glow; g.fillRect(0, 0, W, H);
+    g.globalCompositeOperation = 'lighter';
+    for (let i = 0; i < 7; i++) {
+      const a = -Math.PI / 2 + (i - 3) * 0.32 + 0.1, len = H * 1.4, wdt = 0.05 + (i % 3) * 0.02;
+      g.fillStyle = 'rgba(255,220,160,0.05)';
+      g.beginPath(); g.moveTo(sx, sy);
+      g.lineTo(sx + Math.cos(a - wdt) * len, sy + Math.sin(a - wdt) * len);
+      g.lineTo(sx + Math.cos(a + wdt) * len, sy + Math.sin(a + wdt) * len);
+      g.closePath(); g.fill();
+    }
+    g.globalCompositeOperation = 'source-over';
+    g.fillStyle = 'rgba(255,248,220,0.95)'; g.beginPath(); g.arc(sx, sy, H * 0.07, 0, TAU); g.fill();
+    BG.sky = c;
+  }
+  const T = Math.round(Math.max(H * 2.4, 600)), M = H * 0.25, LH = H * 1.5;
+  const layer = draw => { const c = makeCanvas(T * R, LH * R), g = c.getContext('2d'); g.scale(R, R); draw(g); return { c, w: T, h: LH, m: M }; };
+  const wrap = (fn) => { for (const dx of [-T, 0, T]) fn(dx); };
+  const S = k => TAU * k / T;
+
+  // --- הרים רחוקים ---
+  BG.mount = layer(g => {
+    const ridge = (x, a, b) => M + H * (a + 0.07 * Math.sin(S(2) * x + b) + 0.035 * Math.sin(S(5) * x + b * 2) + 0.012 * Math.sin(S(13) * x + b));
+    [[0.36, 1.3, '#b98aa6', '#efb08c'], [0.46, 4.1, '#9a7598', '#dc9a84']].forEach(([a, b, c1, c2]) => {
+      const gr = g.createLinearGradient(0, M + H * a - H * 0.1, 0, M + H);
+      gr.addColorStop(0, c1); gr.addColorStop(1, c2);
+      g.fillStyle = gr; g.beginPath(); g.moveTo(0, LH);
+      for (let x = 0; x <= T; x += 6) g.lineTo(x, ridge(x, a, b));
+      g.lineTo(T, LH); g.closePath(); g.fill();
+    });
+  });
+  // --- צמרות רחוקות ---
+  BG.far = layer(g => {
+    const rnd = mulberry32(11);
+    const base = x => M + H * (0.6 + 0.03 * Math.sin(S(3) * x + 0.7) + 0.02 * Math.sin(S(7) * x));
+    g.fillStyle = '#5c8a76';
+    g.beginPath(); g.moveTo(0, LH); for (let x = 0; x <= T; x += 8) g.lineTo(x, base(x)); g.lineTo(T, LH); g.fill();
+    const n = Math.round(T / (H * 0.07));
+    for (let i = 0; i < n; i++) {
+      const x = i / n * T + rnd() * 20, r = H * (0.04 + rnd() * 0.06), y = base(x) + r * 0.3;
+      wrap(dx => { g.beginPath(); g.arc(x + dx, y, r, 0, TAU); g.fill(); });
+    }
+    // עצים בולטים
+    for (let i = 0; i < 5; i++) {
+      const x = rnd() * T, top = M + H * (0.3 + rnd() * 0.15), r = H * (0.07 + rnd() * 0.04);
+      wrap(dx => {
+        g.fillRect(x + dx - 3, top, 6, H * 0.4);
+        g.beginPath(); g.arc(x + dx, top, r, 0, TAU); g.arc(x + dx - r * 0.7, top + r * 0.3, r * 0.7, 0, TAU); g.arc(x + dx + r * 0.7, top + r * 0.3, r * 0.7, 0, TAU); g.fill();
+      });
+    }
+    g.globalCompositeOperation = 'source-atop';
+    const hz = g.createLinearGradient(0, M + H * 0.3, 0, M + H);
+    hz.addColorStop(0, 'rgba(255,190,150,0.35)'); hz.addColorStop(1, 'rgba(255,220,180,0.15)');
+    g.fillStyle = hz; g.fillRect(0, 0, T, LH);
+    g.globalCompositeOperation = 'source-over';
+  });
+  // --- עצים באמצע: גזעים, צמרות עם תאורה חמה, ליאנות ---
+  BG.mid = layer(g => {
+    const rnd = mulberry32(23);
+    const ground = M + H * 0.88;
+    const n = Math.round(T / (H * 0.42));
+    for (let i = 0; i < n; i++) {
+      const x = (i + rnd() * 0.6) / n * T, w = H * (0.025 + rnd() * 0.03), top = M + H * (0.12 + rnd() * 0.3);
+      const blobs = []; const cr = H * (0.08 + rnd() * 0.06);
+      for (let k = 0; k < 8; k++) blobs.push([rand2(rnd, -1.3, 1.3) * cr, rand2(rnd, -0.6, 0.5) * cr, cr * (0.5 + rnd() * 0.5)]);
+      const vines = []; for (let k = 0; k < 3; k++) vines.push([rand2(rnd, -1, 1) * cr, H * (0.2 + rnd() * 0.35), rand2(rnd, -20, 20)]);
+      wrap(dx => {
+        const X = x + dx;
+        const tg = g.createLinearGradient(X - w, 0, X + w, 0);
+        tg.addColorStop(0, '#3d3a2c'); tg.addColorStop(0.4, '#58503a'); tg.addColorStop(1, '#2a2a20');
+        g.fillStyle = tg;
+        g.beginPath(); g.moveTo(X - w / 2, top); g.lineTo(X + w / 2, top); g.lineTo(X + w * 0.9, ground + 10); g.lineTo(X - w * 0.9, ground + 10); g.fill();
+        g.strokeStyle = '#26402f'; g.lineWidth = 2;
+        for (const [vx, vl, sw] of vines) { g.beginPath(); g.moveTo(X + vx, top); g.quadraticCurveTo(X + vx + sw, top + vl * 0.6, X + vx + sw * 0.3, top + vl); g.stroke(); }
+        g.fillStyle = '#2b5443';
+        for (const [bx, by, br] of blobs) { g.beginPath(); g.arc(X + bx, top + by, br, 0, TAU); g.fill(); }
+        g.fillStyle = 'rgba(160,190,90,0.28)';
+        for (const [bx, by, br] of blobs) { g.beginPath(); g.arc(X + bx - br * 0.25, top + by - br * 0.3, br * 0.65, 0, TAU); g.fill(); }
+      });
+    }
+    // שיחים וקרקע
+    g.fillStyle = '#21402f';
+    const bn = Math.round(T / (H * 0.08));
+    for (let i = 0; i < bn; i++) {
+      const x = i / bn * T + rnd() * 10, r = H * (0.04 + rnd() * 0.05);
+      wrap(dx => { g.beginPath(); g.arc(x + dx, ground, r, 0, TAU); g.fill(); });
+    }
+    g.fillRect(0, ground, T, LH - ground);
+  });
+  // --- חזית: עלים כהים בקצוות המסך ---
+  BG.fore = layer(g => {
+    const rnd = mulberry32(5);
+    g.fillStyle = '#0b1b15';
+    const n = Math.round(T / (H * 0.55));
+    for (let i = 0; i < n; i++) {
+      const x = (i + rnd()) / n * T, by = M + H * (1.02 + rnd() * 0.04);
+      const leaves = []; for (let k = 0; k < 6; k++) leaves.push([rand2(rnd, -40, 40), H * (0.12 + rnd() * 0.12), rand2(rnd, -1.2, 1.2), H * (0.035 + rnd() * 0.02)]);
+      wrap(dx => { for (const [ox, len, ang, wd] of leaves) leafShape(g, x + dx + ox, by, len, wd, -Math.PI / 2 + ang); });
+    }
+    const vn = Math.round(T / (H * 0.7));
+    g.strokeStyle = '#0b1b15'; g.lineWidth = 3;
+    for (let i = 0; i < vn; i++) {
+      const x = (i + rnd()) / vn * T, len = H * (0.08 + rnd() * 0.14), sw = rand2(rnd, -15, 15);
+      wrap(dx => {
+        const X = x + dx;
+        g.beginPath(); g.moveTo(X, M - H * 0.2); g.quadraticCurveTo(X + sw, M + len * 0.5, X, M + len); g.stroke();
+        for (let k = 0; k < 4; k++) leafShape(g, X + (k % 2 ? 4 : -4), M + len * (0.3 + k * 0.2), H * 0.035, H * 0.014, Math.PI / 2 + (k % 2 ? -0.8 : 0.8));
+      });
+    }
+  });
+  // --- ערפל וויניֶט ---
+  {
+    const c = makeCanvas(W * R, H * R), g = c.getContext('2d'); g.scale(R, R);
+    const fg = g.createLinearGradient(0, 0, 0, H);
+    fg.addColorStop(0, 'rgba(255,220,180,0)'); fg.addColorStop(0.45, 'rgba(255,214,170,0.04)'); fg.addColorStop(0.78, 'rgba(255,225,190,0.3)'); fg.addColorStop(1, 'rgba(235,240,225,0.38)');
+    g.fillStyle = fg; g.fillRect(0, 0, W, H);
+    BG.fog = c;
+  }
+  {
+    const c = makeCanvas(W * R, H * R), g = c.getContext('2d'); g.scale(R, R);
+    const vg = g.createRadialGradient(W / 2, H / 2, Math.min(W, H) * 0.35, W / 2, H / 2, Math.max(W, H) * 0.75);
+    vg.addColorStop(0, 'rgba(0,0,0,0)'); vg.addColorStop(1, 'rgba(20,8,0,0.45)');
+    g.fillStyle = vg; g.fillRect(0, 0, W, H);
+    BG.vig = c;
+  }
+}
+function rand2(r, a, b) { return a + r() * (b - a); }
+function leafShape(g, x, y, len, wd, ang) {
+  g.save(); g.translate(x, y); g.rotate(ang);
+  g.beginPath(); g.moveTo(0, 0);
+  g.quadraticCurveTo(len * 0.5, -wd, len, 0);
+  g.quadraticCurveTo(len * 0.5, wd, 0, 0);
+  g.fill(); g.restore();
+}
+
+/* ===================== ספרייטים עם glow (מרונדרים פעם אחת) ===================== */
+function sprite(size, units, draw) {
+  const c = makeCanvas(size, size), g = c.getContext('2d');
+  g.translate(size / 2, size / 2); g.scale(size / units, size / units);
+  draw(g); return c;
+}
+function glow(g, r, color) {
+  const gr = g.createRadialGradient(0, 0, 0, 0, 0, r);
+  gr.addColorStop(0, color); gr.addColorStop(1, 'rgba(0,0,0,0)');
+  g.fillStyle = gr; g.beginPath(); g.arc(0, 0, r, 0, TAU); g.fill();
+}
+function bananaShape(g, c1, c2) {
+  g.save(); g.rotate(-0.45); g.translate(0, -3);
+  const gr = g.createLinearGradient(0, -6, 0, 12);
+  gr.addColorStop(0, c1); gr.addColorStop(1, c2);
+  g.beginPath();
+  g.arc(0, -14, 24, 0.15 * Math.PI, 0.85 * Math.PI);
+  g.arc(0, -75.4, 75.4, 1.858, 1.283, true);
+  g.closePath();
+  g.fillStyle = gr; g.fill();
+  g.lineWidth = 1.8; g.strokeStyle = '#7a4a12'; g.stroke();
+  g.strokeStyle = 'rgba(255,255,255,0.7)'; g.lineWidth = 2;
+  g.beginPath(); g.arc(0, -14, 19.5, 0.32 * Math.PI, 0.6 * Math.PI); g.stroke();
+  g.fillStyle = '#5a3510';
+  g.beginPath(); g.arc(21.4, -3.3, 2.4, 0, TAU); g.arc(-21.4, -3.3, 2.4, 0, TAU); g.fill();
+  g.restore();
+}
+function buildSprites() {
+  SPR.banana = sprite(128, 64, g => { glow(g, 30, 'rgba(255,215,80,0.55)'); bananaShape(g, '#fff07a', '#f2b31b'); });
+  SPR.gold = sprite(160, 84, g => {
+    glow(g, 40, 'rgba(255,240,150,0.85)');
+    bananaShape(g, '#fffbd0', '#ffb800');
+    g.fillStyle = '#fff';
+    for (const [x, y, s] of [[-16, -16, 5], [18, -12, 4], [4, 18, 3.5]]) {
+      g.beginPath(); g.moveTo(x, y - s); g.lineTo(x + s * 0.3, y - s * 0.3); g.lineTo(x + s, y); g.lineTo(x + s * 0.3, y + s * 0.3);
+      g.lineTo(x, y + s); g.lineTo(x - s * 0.3, y + s * 0.3); g.lineTo(x - s, y); g.lineTo(x - s * 0.3, y - s * 0.3); g.closePath(); g.fill();
+    }
+  });
+  const pegSpr = (ring, knob1, knob2, glowC, cracks) => sprite(112, 56, g => {
+    glow(g, 26, glowC);
+    const kg = g.createRadialGradient(-3, -4, 1, 0, 0, 12);
+    kg.addColorStop(0, knob1); kg.addColorStop(1, knob2);
+    g.fillStyle = kg; g.beginPath(); g.arc(0, 0, 11, 0, TAU); g.fill();
+    g.strokeStyle = ring; g.lineWidth = 3.5; g.beginPath(); g.arc(0, 0, 13.5, 0, TAU); g.stroke();
+    g.strokeStyle = 'rgba(0,0,0,0.35)'; g.lineWidth = 1.5; g.beginPath(); g.arc(0, 0, 15.5, 0, TAU); g.stroke();
+    g.fillStyle = 'rgba(255,255,255,0.55)'; g.beginPath(); g.arc(-4, -4, 3, 0, TAU); g.fill();
+    if (cracks) {
+      g.strokeStyle = '#2a1408'; g.lineWidth = 1.6;
+      g.beginPath(); g.moveTo(-7, -6); g.lineTo(-1, 0); g.lineTo(-4, 5); g.moveTo(-1, 0); g.lineTo(6, 2); g.lineTo(8, 7); g.moveTo(3, -9); g.lineTo(2, -3); g.stroke();
+    }
+  });
+  SPR.peg = pegSpr('#ffcf5a', '#c08a52', '#5a3519', 'rgba(255,200,110,0.5)', false);
+  SPR.pegBreak = pegSpr('#ff7b54', '#a7653d', '#4a2410', 'rgba(255,110,70,0.45)', true);
+  SPR.pegMove = pegSpr('#5ce1e6', '#9fb3a0', '#3b4f46', 'rgba(90,225,230,0.45)', false);
+  SPR.spike = sprite(160, 80, g => {
+    glow(g, 38, 'rgba(255,60,60,0.25)');
+    g.fillStyle = '#d7d0dc'; g.strokeStyle = '#2b2430'; g.lineWidth = 1.6;
+    for (let i = 0; i < 10; i++) {
+      const a = i / 10 * TAU;
+      g.beginPath();
+      g.moveTo(Math.cos(a - 0.22) * 13, Math.sin(a - 0.22) * 13);
+      g.lineTo(Math.cos(a) * 25, Math.sin(a) * 25);
+      g.lineTo(Math.cos(a + 0.22) * 13, Math.sin(a + 0.22) * 13);
+      g.closePath(); g.fill(); g.stroke();
+    }
+    const bg = g.createRadialGradient(-4, -4, 1, 0, 0, 15);
+    bg.addColorStop(0, '#7a6a80'); bg.addColorStop(1, '#2b2430');
+    g.fillStyle = bg; g.beginPath(); g.arc(0, 0, 14, 0, TAU); g.fill(); g.stroke();
+    g.fillStyle = '#ff4a3a'; g.beginPath(); g.arc(-3, -2, 2.6, 0, TAU); g.arc(4, -2, 2.6, 0, TAU); g.fill();
+  });
+  const orb = (col, icon) => sprite(156, 78, g => {
+    glow(g, 38, col.replace('1)', '0.5)'));
+    const og = g.createRadialGradient(-6, -8, 2, 0, 0, 21);
+    og.addColorStop(0, 'rgba(255,255,255,0.75)'); og.addColorStop(0.5, col.replace('1)', '0.45)')); og.addColorStop(1, col.replace('1)', '0.85)'));
+    g.fillStyle = og; g.beginPath(); g.arc(0, 0, 20, 0, TAU); g.fill();
+    g.strokeStyle = 'rgba(255,255,255,0.85)'; g.lineWidth = 2; g.stroke();
+    icon(g);
+  });
+  SPR.magnet = orb('rgba(255,90,90,1)', g => {
+    g.lineCap = 'butt'; g.strokeStyle = '#d42a2a'; g.lineWidth = 6;
+    g.beginPath(); g.arc(0, 1, 7, 0, Math.PI); g.moveTo(7, 1); g.lineTo(7, -8); g.moveTo(-7, 1); g.lineTo(-7, -8); g.stroke();
+    g.strokeStyle = '#eee'; g.beginPath(); g.moveTo(7, -7); g.lineTo(7, -11); g.moveTo(-7, -7); g.lineTo(-7, -11); g.stroke();
+  });
+  SPR.shield = orb('rgba(80,200,255,1)', g => {
+    g.fillStyle = '#1d7fc4'; g.strokeStyle = '#fff'; g.lineWidth = 2;
+    g.beginPath(); g.moveTo(0, -11); g.lineTo(9, -7); g.quadraticCurveTo(9, 6, 0, 12); g.quadraticCurveTo(-9, 6, -9, -7); g.closePath(); g.fill(); g.stroke();
+  });
+  SPR.slow = orb('rgba(170,120,255,1)', g => {
+    g.strokeStyle = '#fff'; g.lineWidth = 2.5; g.fillStyle = '#6a3fc9';
+    g.beginPath(); g.arc(0, 0, 10, 0, TAU); g.fill(); g.stroke();
+    g.lineCap = 'round'; g.beginPath(); g.moveTo(0, 0); g.lineTo(0, -7); g.moveTo(0, 0); g.lineTo(5, 3); g.stroke();
+  });
+  SPR.bubble = sprite(200, 100, g => {
+    const bg = g.createRadialGradient(0, 0, 30, 0, 0, 48);
+    bg.addColorStop(0, 'rgba(120,220,255,0)'); bg.addColorStop(0.8, 'rgba(120,220,255,0.25)'); bg.addColorStop(1, 'rgba(160,235,255,0)');
+    g.fillStyle = bg; g.beginPath(); g.arc(0, 0, 48, 0, TAU); g.fill();
+    g.strokeStyle = 'rgba(190,240,255,0.7)'; g.lineWidth = 2.5; g.beginPath(); g.arc(0, 0, 42, 0, TAU); g.stroke();
+    g.strokeStyle = 'rgba(255,255,255,0.7)'; g.lineWidth = 3; g.beginPath(); g.arc(0, 0, 36, -2.4, -1.6); g.stroke();
+  });
+}
+
+/* ===================== שינוי גודל + איכות אדפטיבית ===================== */
+function resize() {
+  W = Math.max(1, window.innerWidth); H = Math.max(1, window.innerHeight);
+  DPR = Math.min(window.devicePixelRatio || 1, dprCap);
+  cvs.width = Math.round(W * DPR); cvs.height = Math.round(H * DPR);
+  BGR = Math.min(DPR, 1.5);
+  baseScale = H / CFG.VIEW_H;
+  buildBackground();
+  const portrait = H > W && isTouch;
+  $('rotate').classList.toggle('show', portrait);
+  if (portrait && state === 'play') pauseGame();
+}
+let resizeTimer = 0;
+function queueResize() { clearTimeout(resizeTimer); resizeTimer = setTimeout(resize, 120); }
+window.addEventListener('resize', queueResize);
+window.addEventListener('orientationchange', queueResize);
+
+// אם הטלפון מתקשה — מורידים רזולוציה כדי לשמור על 60fps
+const perf = { acc: 0, n: 0, downgrades: 0 };
+function perfMonitor(fdt) {
+  if (state !== 'play') { perf.acc = 0; perf.n = 0; return; }
+  perf.acc += fdt; perf.n++;
+  if (perf.n >= 120) {
+    const avg = perf.acc / perf.n;
+    if (avg > 0.022 && perf.downgrades < 2 && dprCap > 1) { dprCap = Math.max(1, dprCap - 0.5); perf.downgrades++; resize(); }
+    perf.acc = 0; perf.n = 0;
+  }
+}
+
+/* ===================== קלט — לחיצה אחת בכל מקום ===================== */
+function onDown(e) {
+  Sound.unlock();
+  if (e.target.closest && (e.target.closest('.ui-btn') || e.target.closest('.screen'))) return;
+  if (e.cancelable) e.preventDefault();
+  input.pointers.add(e.pointerId);
+  if (!input.down) {
+    input.down = true;
+    if (state === 'play') { input.pressT = G.t; G.player.autoHold = false; }
+  }
+}
+function onUp(e) {
+  input.pointers.delete(e.pointerId);
+  if (input.pointers.size === 0) input.down = false;
+}
+window.addEventListener('pointerdown', onDown, { passive: false });
+window.addEventListener('pointerup', onUp);
+window.addEventListener('pointercancel', onUp);
+window.addEventListener('blur', () => { input.pointers.clear(); input.down = false; });
+// מניעת זום, גלילה, תפריט הקשה ובחירת טקסט
+const notBtn = e => !(e.target.closest && e.target.closest('.ui-btn'));
+document.addEventListener('touchstart', e => { if (notBtn(e)) e.preventDefault(); }, { passive: false });
+document.addEventListener('touchmove', e => e.preventDefault(), { passive: false });
+document.addEventListener('touchend', e => { Sound.unlock(); if (notBtn(e)) e.preventDefault(); }, { passive: false });
+document.addEventListener('gesturestart', e => e.preventDefault());
+document.addEventListener('dblclick', e => e.preventDefault());
+document.addEventListener('contextmenu', e => e.preventDefault());
+document.addEventListener('selectstart', e => e.preventDefault());
+// מקלדת (לבדיקה במחשב): רווח = החזקה
+window.addEventListener('keydown', e => {
+  if (e.code === 'Space' && !e.repeat) { onDown({ target: document.body, pointerId: 'kb', cancelable: false }); e.preventDefault(); }
+  if (e.code === 'Escape' || e.code === 'KeyP') { if (state === 'play') pauseGame(); else if (state === 'paused') resumeGame(); }
+});
+window.addEventListener('keyup', e => { if (e.code === 'Space') onUp({ pointerId: 'kb' }); });
+
+/* ===================== ממשק ומצבי משחק ===================== */
+function showScreen(id) {
+  for (const s of ['menu', 'pause', 'over']) $(s).classList.toggle('show', s === id);
+}
+function goFullscreen() {
+  try {
+    const el = document.documentElement;
+    if (!document.fullscreenElement && el.requestFullscreen) {
+      el.requestFullscreen({ navigationUI: 'hide' }).then(() => {
+        if (screen.orientation && screen.orientation.lock) screen.orientation.lock('landscape').catch(() => { });
+      }).catch(() => { });
+    }
+  } catch (e) { }
+}
+function startGame() {
+  Sound.unlock(); Sound.fx.click();
+  newWorld();
+  state = 'play';
+  input.down = false; input.pointers.clear(); input.pressT = -999;
+  lastHud = { score: -1, ban: -1, mult: -1 };
+  $('hud-best').textContent = 'שיא ' + best;
+  showScreen(null);
+  $('hud').classList.add('show');
+  $('btn-pause').classList.add('show');
+  $('hint').classList.toggle('show', firstRun);
+  G.hintShown = !firstRun;
+  firstRun = false;
+  Sound.music(0.42); Sound.slow(false);
+}
+function pauseGame() {
+  if (state !== 'play') return;
+  state = 'paused';
+  showScreen('pause');
+  $('btn-pause').classList.remove('show');
+  Sound.music(0); Sound.slow(false);
+}
+function resumeGame() {
+  if (state !== 'paused') return;
+  if (H > W && isTouch) return;
+  Sound.unlock();
+  state = 'play';
+  input.down = false; input.pointers.clear(); input.pressT = -999;
+  // אחרי פאוז הגורילה נתפסת אוטומטית עד הלחיצה הבאה — כדי לא ליפול מייד
+  if (G.player.attached) G.player.autoHold = true;
+  showScreen(null);
+  $('btn-pause').classList.add('show');
+  Sound.music(0.42); if (G.power.slow > 0) Sound.slow(true);
+  lastFrame = performance.now();
+}
+function toMenu() {
+  newWorld();
+  state = 'menu';
+  showScreen('menu');
+  $('hud').classList.remove('show');
+  $('btn-pause').classList.remove('show');
+  $('menu-best').textContent = best;
+  Sound.music(0.3); Sound.slow(false);
+}
+let overReadyAt = 0;
+function gameOver() {
+  state = 'over';
+  const score = G.score, isBest = score > best;
+  if (isBest) { best = score; store.set('slingkong_best', String(best)); Sound.fx.record(); }
+  $('over-title').textContent = G.deathBy === 'water' ? 'נפלתם לנהר! 🌊' : G.deathBy === 'bird' ? 'התנגשתם בציפור! 🐦' : 'אאוץ׳, קוצים! 🌵';
+  $('final-score').textContent = score;
+  $('final-dist').textContent = G.dist || 0;
+  $('final-ban').textContent = G.bananaCount;
+  $('final-best').textContent = best;
+  $('new-best').classList.toggle('show', isBest);
+  $('hud').classList.remove('show');
+  showScreen('over');
+  overReadyAt = performance.now() + 500;   // מונע לחיצה בטעות על "שוב"
+  Sound.music(0.22); Sound.slow(false);
+}
+
+function bindBtn(id, fn) {
+  $(id).addEventListener('click', e => { e.stopPropagation(); Sound.unlock(); fn(); });
+}
+// לחיצה בכל מקום בתפריט מתחילה משחק
+$('menu').addEventListener('pointerdown', e => {
+  if (state !== 'menu') return;
+  e.preventDefault(); goFullscreen(); startGame();
+});
+bindBtn('btn-play', () => { if (state === 'menu') { goFullscreen(); startGame(); } });
+bindBtn('btn-pause', () => { Sound.fx.click(); pauseGame(); });
+bindBtn('btn-resume', () => { Sound.fx.click(); resumeGame(); });
+bindBtn('btn-restart-p', () => startGame());
+bindBtn('btn-menu-p', () => { Sound.fx.click(); toMenu(); });
+bindBtn('btn-again', () => { if (performance.now() > overReadyAt) startGame(); });
+bindBtn('btn-menu-o', () => { if (performance.now() > overReadyAt) { Sound.fx.click(); toMenu(); } });
+bindBtn('btn-mute', () => { Sound.toggleMute(); updateMuteIcon(); Sound.fx.click(); });
+function updateMuteIcon() {
+  $('btn-mute').innerHTML = Sound.muted
+    ? '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M4 9h4l5-4v14l-5-4H4z"/><path d="M16 9l5 6M21 9l-5 6" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" fill="none"/></svg>'
+    : '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M4 9h4l5-4v14l-5-4H4z"/><path d="M16 8.5a5 5 0 0 1 0 7M18.5 6a8.5 8.5 0 0 1 0 12" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/></svg>';
+}
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) { pauseGame(); Sound.suspend(); }
+  else Sound.resume();
+});
+
+/* ===================== לולאה ראשית: fixed timestep + accumulator ===================== */
+let lastFrame = performance.now(), acc = 0;
+function frame(now) {
+  requestAnimationFrame(frame);
+  let fdt = (now - lastFrame) / 1000; lastFrame = now;
+  if (!(fdt > 0)) fdt = 0; if (fdt > 0.1) fdt = 0.1;
+  perfMonitor(fdt);
+  let alpha = 1;
+  if (state === 'play' || state === 'menu' || state === 'dying') {
+    const target = state === 'dying' ? 0.55 : (G.power.slow > 0 ? CFG.SLOW_SCALE : 1);
+    G.timeScale += (target - G.timeScale) * (1 - Math.exp(-8 * fdt));
+    acc += fdt * G.timeScale;
+    let steps = 0;
+    while (acc >= DT && steps < CFG.MAX_STEPS) { step(DT); acc -= DT; steps++; }
+    if (steps >= CFG.MAX_STEPS) acc = 0;
+    alpha = acc / DT;
+    updateFrame(fdt, alpha);
+  } else if (state === 'over') {
+    // ברקע של מסך הסיום העולם ממשיך לנשום
+    updateParticles(fdt * 0.5);
+  }
+  render(alpha);
+}
+
+/* ===================== אתחול ===================== */
+buildSprites();
+resize();
+initAmbient();
+newWorld();
+updateMuteIcon();
+$('menu-best').textContent = best;
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>
