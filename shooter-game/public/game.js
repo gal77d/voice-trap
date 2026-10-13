@@ -42,7 +42,7 @@ if (IS_IOS && !IS_STANDALONE) $('installHint').classList.remove('hidden');
 // ---------- Renderer ----------
 const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, IS_TOUCH ? 1.5 : 2));
-renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.setSize(window.innerWidth, window.innerHeight, false); // הגודל בפועל נקבע ב-CSS
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 0.9;
@@ -991,13 +991,19 @@ $('joinBtn').onclick = () => {
 };
 $('restartBtn').onclick = () => send({ t: 'restart' });
 
-window.addEventListener('resize', () => {
-  renderer.setSize(window.innerWidth, window.innerHeight);
-  camera.aspect = weaponCam.aspect = window.innerWidth / window.innerHeight;
+// בדיקת גודל המסך בכל פריים: באייפון (במיוחד ממסך הבית) אירוע resize
+// לא תמיד מגיע אחרי סיבוב, והתמונה נשארת בגודל של מצב עמידה
+let viewW = 0, viewH = 0;
+function syncSize() {
+  const w = window.innerWidth, h = window.innerHeight;
+  if (w === viewW && h === viewH) return;
+  viewW = w; viewH = h;
+  renderer.setSize(w, h, false);
+  camera.aspect = weaponCam.aspect = w / h;
   camera.updateProjectionMatrix();
   weaponCam.updateProjectionMatrix();
   if (!moveTouch) resetJoy();
-});
+}
 
 // דמויות לתצוגה ברקע התפריט
 const demo = [];
@@ -1053,6 +1059,7 @@ function loop(now) {
   requestAnimationFrame(loop);
   const dt = Math.min(0.1, (now - last) / 1000);
   last = now;
+  syncSize();
 
   if (inGame && cfg) {
     keyboardInput();
