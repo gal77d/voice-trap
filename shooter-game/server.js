@@ -23,9 +23,8 @@ const MAX_INPUTS_PER_TICK = 4;     // הגנה בסיסית מפני "ספידה
 const COLORS = ['#ff4d4d', '#4da6ff', '#5cd65c', '#ffcc33'];
 
 // ---------- כוחות וכסף ----------
-const RAPID_MS = 3000;             // ⚡ ירי בלי המתנה ל-3 שניות (חינם)
-const RAPID_COOLDOWN_MS = 20000;   // ...ואז 20 שניות המתנה עד הפעם הבאה
-const RAPID_FIRE_MS = 70;          // גם בירי מהיר יש מינימום, כדי שלא יציפו את השרת
+const SCOPE_MS = 3000;             // 🎯 כוונת סנייפר שרואה יריבים דרך קירות ל-3 שניות (חינם)
+const SCOPE_COOLDOWN_MS = 20000;   // ...ואז 20 שניות המתנה עד הפעם הבאה
 const SHIELD_MS = 8000;            // 🛡 מגן ל-8 שניות
 const SHIELD_COST = 200;
 const KILL_REWARD = 100;
@@ -137,8 +136,8 @@ function sendMe(p) {
   const now = Date.now();
   send(p.ws, {
     t: 'me', money: p.money,
-    rapidLeft: Math.max(0, p.rapidUntil - now),
-    rapidCd: Math.max(0, p.rapidReadyAt - now),
+    scopeLeft: Math.max(0, p.scopeUntil - now),
+    scopeCd: Math.max(0, p.scopeReadyAt - now),
     shieldLeft: Math.max(0, p.shieldUntil - now),
   });
 }
@@ -146,10 +145,10 @@ function sendMe(p) {
 function usePower(room, p, kind) {
   const now = Date.now();
   if (room.state !== 'play' || !p.alive) return;
-  if (kind === 'rapid') {
-    if (now < p.rapidReadyAt) return;
-    p.rapidUntil = now + RAPID_MS;
-    p.rapidReadyAt = p.rapidUntil + RAPID_COOLDOWN_MS;
+  if (kind === 'scope') {
+    if (now < p.scopeReadyAt) return;
+    p.scopeUntil = now + SCOPE_MS;
+    p.scopeReadyAt = p.scopeUntil + SCOPE_COOLDOWN_MS;
   } else if (kind === 'shield') {
     if (p.money < SHIELD_COST || now < p.shieldUntil) return;
     p.money -= SHIELD_COST;
@@ -165,7 +164,7 @@ function addPlayer(room, ws, name) {
     id: nextId++, ws, name, color: COLORS.find(c => !used.has(c)),
     x: 0, z: 0, yaw: 0, pitch: 0, alive: true, respawnAt: 0,
     score: 0, lastShot: 0, inputs: [], ack: 0, side: pickSide(room),
-    money: 0, rapidUntil: 0, rapidReadyAt: 0, shieldUntil: 0,
+    money: 0, scopeUntil: 0, scopeReadyAt: 0, shieldUntil: 0,
   };
   room.players.set(p.id, p);
   spawn(room, p);
@@ -174,7 +173,7 @@ function addPlayer(room, ws, name) {
     t: 'joined', id: p.id, code: room.code,
     cfg: {
       speed: MOVE_SPEED, radius: PLAYER_RADIUS, tick: TICK_RATE, win: room.win, eye: EYE_HEIGHT,
-      shieldCost: SHIELD_COST, rapidMs: RAPID_MS, rapidCooldownMs: RAPID_COOLDOWN_MS, shieldMs: SHIELD_MS,
+      shieldCost: SHIELD_COST, scopeMs: SCOPE_MS, scopeCooldownMs: SCOPE_COOLDOWN_MS, shieldMs: SHIELD_MS,
     },
     state: room.state,
   });
@@ -235,8 +234,7 @@ function tick(room) {
 
 function handleShoot(room, p, yaw, pitch) {
   const now = Date.now();
-  const cooldown = now < p.rapidUntil ? RAPID_FIRE_MS : FIRE_COOLDOWN_MS;
-  if (room.state !== 'play' || !p.alive || now - p.lastShot < cooldown) return;
+  if (room.state !== 'play' || !p.alive || now - p.lastShot < FIRE_COOLDOWN_MS) return;
   p.lastShot = now;
   if (typeof yaw === 'number') p.yaw = yaw;
   if (typeof pitch === 'number') p.pitch = Math.max(-1.4, Math.min(1.4, pitch));
@@ -264,7 +262,7 @@ function handleShoot(room, p, yaw, pitch) {
 
   best.alive = false;
   best.respawnAt = now + RESPAWN_MS;
-  best.rapidUntil = 0;
+  best.scopeUntil = 0;
   p.score++;
   p.money += KILL_REWARD;
   sendMe(p);
@@ -285,7 +283,7 @@ function restart(room, win) {
   room.win = cleanWin(win, room.win);
   for (const p of room.players.values()) {
     p.score = 0;
-    p.money = 0; p.rapidUntil = 0; p.rapidReadyAt = 0; p.shieldUntil = 0;
+    p.money = 0; p.scopeUntil = 0; p.scopeReadyAt = 0; p.shieldUntil = 0;
     p.alive = false; // כדי ש-spawn יפזר אותם
   }
   room.nextIncome = Date.now() + INCOME_MS;

@@ -22,9 +22,11 @@ let respawnAt = 0;
 let deathTime = 0;
 
 const SHOOT_INTERVAL = 350;
-const RAPID_INTERVAL = 80;   // ⚡ ירי מהיר
+const SCOPE_FOV = 22;        // 🎯 זום של כוונת הסנייפר
+const NORMAL_FOV = 72;
 // כוחות: זמנים מקומיים (performance.now) לפי מה שהשרת שולח
-const powers = { money: 0, rapidUntil: 0, rapidReady: 0, shieldUntil: 0 };
+const powers = { money: 0, scopeUntil: 0, scopeReady: 0, shieldUntil: 0 };
+let scoping = false;
 const ARROW_MS = 3000;
 let lastShotTime = 0;
 const IS_TOUCH = 'ontouchstart' in window;
@@ -467,6 +469,24 @@ function createCharacter(name, color) {
   root.add(model);
   ch.model = model;
 
+  // צללית אדומה שנראית דרך קירות (רק בזמן כוונת סנייפר)
+  const xray = new THREE.MeshBasicMaterial({
+    color: 0xff2a2a, transparent: true, opacity: 0.55, depthTest: false, depthWrite: false,
+  });
+  ch.ghosts = [];
+  const skinned = [];
+  model.traverse(o => { if (o.isSkinnedMesh) skinned.push(o); });
+  for (const o of skinned) {
+    const g = new THREE.SkinnedMesh(o.geometry, xray);
+    g.bind(o.skeleton, o.bindMatrix);
+    g.position.copy(o.position); g.quaternion.copy(o.quaternion); g.scale.copy(o.scale);
+    g.frustumCulled = false;
+    g.renderOrder = 10;
+    g.visible = false;
+    o.parent.add(g);
+    ch.ghosts.push(g);
+  }
+
   // רובה ביד ימין
   const hand = model.getObjectByName('mixamorigRightHand');
   if (hand) {
@@ -755,15 +775,15 @@ function handle(m) {
     case 'me': {
       const now = performance.now();
       powers.money = m.money;
-      powers.rapidUntil = now + m.rapidLeft;
-      powers.rapidReady = now + m.rapidCd;
+      powers.scopeUntil = now + m.scopeLeft;
+      powers.scopeReady = now + m.scopeCd;
       powers.shieldUntil = now + m.shieldLeft;
       $('money').textContent = `💰 ${m.money}`;
       break;
     }
     case 'power': {
       const p = players.get(m.id);
-      if (p && m.id !== myId) addFeedText(`${nameHtml(p)} ${m.kind === 'shield' ? 'הפעיל 🛡️ מגן' : 'הפעיל ⚡ ירי מהיר'}`);
+      if (p && m.id !== myId) addFeedText(`${nameHtml(p)} ${m.kind === 'shield' ? 'הפעיל 🛡️ מגן' : 'מכוון 🎯 סנייפר'}`);
       break;
     }
     case 'block': onBlock(m); break;
@@ -784,6 +804,7 @@ function onSnapshot(list) {
     if (id === myId) {
       const wasAlive = me.alive;
       me.alive = !!alive;
+      if (p.fresh) { me.yaw = yaw; p.fresh = false; } // כיוון התחלתי מהשרת (מול מרכז המפה)
       if (!wasAlive && me.alive) {
         me.yaw = yaw; me.pitch = 0;
         deathMsg.classList.add('hidden');
@@ -840,16 +861,21 @@ function addFeedText(html) {
 
 // כפתורי הכוחות: זמן שנשאר / המתנה / מחיר
 function updatePowersHud(now) {
-  const rb = $('rapidBtn'), sb = $('shieldBtn');
-  const rapidActive = now < powers.rapidUntil;
-  const rapidCd = Math.max(0, powers.rapidReady - now);
-  rb.classList.toggle('active', rapidActive);
-  rb.classList.toggle('cooldown', !rapidActive && rapidCd > 0);
-  rb.querySelector('.pLabel').textContent = rapidActive
-    ? ((powers.rapidUntil - now) / 1000).toFixed(1)
-    : rapidCd > 0 ? Math.ceil(rapidCd / 1000) + 'ש' : 'חינם';
-  const cdTotal = cfg.rapidCooldownMs || 20000;
-  rb.style.setProperty('--cd', rapidActive ? 0 : Math.min(1, rapidCd / cdTotal));
+  const rb = $('scopeBtn'), sb = $('shieldBtn');
+  const scopeActive = now < powers.scopeUntil;
+  const scopeCd = Math.max(0, powers.scopeReady - now);
+  rb.classList.toggle('active', scopeActive);
+  rb.classList.toggle('cooldown', !scopeActive && scopeCd > 0);
+  rb.querySelector('.pLabel').textContent = scopeActive
+    ? ((powers.scopeUntil - now) / 1000).toFixed(1)
+    : scopeCd > 0 ? Math.ceil(scopeCd / 1000) + 'ש' : 'חינם';
+  const cdTotal = cfg.scopeCooldownMs || 20000;
+  rb.style.setProperty('--cd', scopeActive ? 0 : Math.min(1, scopeCd / cdTotal));
+
+  // כוונת סנייפר: זום, מסגרת שחורה, בלי נשק, יריבים נראים דרך קירות
+  scoping = scopeActive && me.alive && !gameOver;
+  $('scope').classList.toggle('hidden', !scoping);
+  $('crosshair').style.visibility = scoping ? 'hidden' : '';
 
   const shieldActive = now < powers.shieldUntil;
   const cost = cfg.shieldCost || 200;
@@ -859,7 +885,6 @@ function updatePowersHud(now) {
   sb.style.setProperty('--cd', 0);
 
   const tint = $('powerTint');
-  tint.classList.toggle('rapid', rapidActive && me.alive);
   tint.classList.toggle('shield', shieldActive && me.alive);
 }
 
@@ -987,6 +1012,8 @@ function resetJoy() {
 resetJoy();
 
 function look(dx, dy) {
+  const zoom = camera.fov / NORMAL_FOV; // בזום מסתובבים לאט יותר, לכיוון מדויק
+  dx *= zoom; dy *= zoom;
   me.yaw -= dx * LOOK_SENS;
   me.pitch = Math.max(-1.3, Math.min(1.3, me.pitch - dy * LOOK_SENS));
   swayX += dx * 0.00025; swayY += dy * 0.00025;
@@ -1050,7 +1077,7 @@ document.addEventListener('dblclick', e => e.preventDefault());
 // מקלדת ועכבר (לבדיקה במחשב): WASD + עכבר + קליק
 document.addEventListener('keydown', e => {
   keys[e.code] = true;
-  if (e.code === 'KeyQ') usePower('rapid');
+  if (e.code === 'KeyQ') usePower('scope');
   if (e.code === 'KeyE') usePower('shield');
 });
 for (const b of document.querySelectorAll('.powerBtn')) b.addEventListener('click', () => usePower(b.dataset.kind));
@@ -1134,8 +1161,7 @@ function clearDemo() {
 
 // ---------- לולאה ראשית ----------
 function tryShoot(now) {
-  const interval = now < powers.rapidUntil ? RAPID_INTERVAL : SHOOT_INTERVAL;
-  if (me.alive && !gameOver && now - lastShotTime >= interval) shoot(now);
+  if (me.alive && !gameOver && now - lastShotTime >= SHOOT_INTERVAL) shoot(now);
 }
 function shoot(now) {
   lastShotTime = now;
@@ -1224,11 +1250,17 @@ function loop(now) {
       }
       updateCharacter(p.ch, p.x, p.z, p.yaw, p.alive, dt, now);
       p.ch.bubble.visible = p.alive && p.shield;
+      for (const g of p.ch.ghosts) g.visible = scoping && p.alive;
       if (p.shield) p.ch.bubble.material.opacity = 0.16 + 0.08 * Math.sin(now * 0.008);
     }
 
     updateArrows(now);
     updatePowersHud(now);
+    const fov = scoping ? SCOPE_FOV : NORMAL_FOV;
+    if (Math.abs(camera.fov - fov) > 0.05) {
+      camera.fov += (fov - camera.fov) * Math.min(1, dt * 14);
+      camera.updateProjectionMatrix();
+    }
 
     if (!me.alive) {
       const s = Math.max(0, Math.ceil((respawnAt - now) / 1000));
@@ -1262,7 +1294,7 @@ function loop(now) {
 
   renderer.clear();
   renderer.render(scene, camera);
-  if (inGame && fpRifle && fpRifle.visible) {
+  if (inGame && fpRifle && fpRifle.visible && !scoping) {
     renderer.clearDepth();
     renderer.render(weaponScene, weaponCam);
   }
