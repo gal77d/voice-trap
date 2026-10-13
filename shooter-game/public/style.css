@@ -239,3 +239,37 @@ html, body {
   #installHint:not(.hidden) ~ * { display: none; }
   .card:has(#installHint:not(.hidden)) .sub { display: none; }
 }
+
+/* ---------- כוחות וכסף ---------- */
+#money {
+  position: absolute; top: 8px; left: 50%; transform: translateX(-50%);
+  font-size: 16px; font-weight: 900; padding: 4px 14px; border-radius: 10px;
+  background: rgba(10, 14, 26, 0.55); border: 1px solid rgba(255,215,90,0.4); color: #ffd75a;
+}
+#powers {
+  position: absolute; right: calc(26px + env(safe-area-inset-right)); bottom: 146px;
+  display: flex; gap: 12px;
+}
+.powerBtn {
+  --cd: 0;
+  position: relative; width: 64px; height: 64px; border-radius: 50%;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  pointer-events: auto; overflow: hidden;
+  background: rgba(10, 14, 26, 0.6); border: 2px solid rgba(255,255,255,0.6);
+}
+.powerBtn::before { /* מילוי המתנה סביב הכפתור */
+  content: ""; position: absolute; inset: 0;
+  background: conic-gradient(rgba(0,0,0,0.65) calc(var(--cd) * 360deg), transparent 0);
+}
+.pIcon { font-size: 24px; line-height: 1; position: relative; }
+.pLabel { font-size: 12px; font-weight: 700; position: relative; margin-top: 2px; }
+.powerBtn.cooldown { opacity: 0.55; }
+#rapidBtn.active { border-color: #ffb347; box-shadow: 0 0 18px #ff8c1a; background: rgba(255,140,26,0.35); }
+#shieldBtn.active { border-color: #55ddff; box-shadow: 0 0 18px #33ccff; background: rgba(51,204,255,0.3); }
+#shieldBtn .pLabel { color: #ffd75a; }
+
+#powerTint { position: fixed; inset: 0; pointer-events: none; z-index: 7; transition: box-shadow 0.25s; }
+#powerTint.rapid { box-shadow: inset 0 0 90px rgba(255,140,26,0.55); }
+#powerTint.shield { box-shadow: inset 0 0 110px rgba(51,204,255,0.55); }
+#powerTint.rapid.shield { box-shadow: inset 0 0 80px rgba(255,140,26,0.45), inset 0 0 140px rgba(51,204,255,0.45); }
+#powerTint.blocked { box-shadow: inset 0 0 160px rgba(120,230,255,0.95); transition: none; }

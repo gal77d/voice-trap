@@ -22,6 +22,9 @@ let respawnAt = 0;
 let deathTime = 0;
 
 const SHOOT_INTERVAL = 350;
+const RAPID_INTERVAL = 80;   // ⚡ ירי מהיר
+// כוחות: זמנים מקומיים (performance.now) לפי מה שהשרת שולח
+const powers = { money: 0, rapidUntil: 0, rapidReady: 0, shieldUntil: 0 };
 const ARROW_MS = 3000;
 let lastShotTime = 0;
 const IS_TOUCH = 'ontouchstart' in window;
@@ -427,6 +430,17 @@ function createCharacter(name, color) {
   root.add(ring);
   ch.ring = ring;
 
+  // בועת מגן (מוצגת רק כשהמגן פעיל)
+  const bubble = new THREE.Mesh(
+    new THREE.SphereGeometry(1.05, 32, 20),
+    new THREE.MeshBasicMaterial({ color: 0x55ddff, transparent: true, opacity: 0.22, depthWrite: false, blending: THREE.AdditiveBlending })
+  );
+  bubble.position.y = 0.95;
+  bubble.scale.y = 1.05;
+  bubble.visible = false;
+  root.add(bubble);
+  ch.bubble = bubble;
+
   const tag = makeNameSprite(name, color);
   tag.position.y = 2.2;
   root.add(tag);
@@ -738,6 +752,21 @@ function handle(m) {
       break;
     }
     case 'kill': onKill(m); break;
+    case 'me': {
+      const now = performance.now();
+      powers.money = m.money;
+      powers.rapidUntil = now + m.rapidLeft;
+      powers.rapidReady = now + m.rapidCd;
+      powers.shieldUntil = now + m.shieldLeft;
+      $('money').textContent = `💰 ${m.money}`;
+      break;
+    }
+    case 'power': {
+      const p = players.get(m.id);
+      if (p && m.id !== myId) addFeedText(`${nameHtml(p)} ${m.kind === 'shield' ? 'הפעיל 🛡️ מגן' : 'הפעיל ⚡ ירי מהיר'}`);
+      break;
+    }
+    case 'block': onBlock(m); break;
     case 'over': onOver(m); break;
     case 'restart':
       cfg.win = m.win;
@@ -749,7 +778,7 @@ function handle(m) {
 }
 
 function onSnapshot(list) {
-  for (const [id, x, z, yaw, pitch, alive, ack] of list) {
+  for (const [id, x, z, yaw, pitch, alive, ack, shield] of list) {
     const p = players.get(id);
     if (!p) continue;
     if (id === myId) {
@@ -773,8 +802,70 @@ function onSnapshot(list) {
         if (p.ch) { p.ch.lastX = null; p.ch.speed = 0; }
       }
       p.alive = !!alive;
+      p.shield = !!shield;
     }
   }
+}
+
+function onBlock(m) {
+  if (m.shooter === myId) showHitText('מגן!', '#55ddff');
+  if (m.target === myId) {
+    const t = $('powerTint');
+    t.classList.add('blocked');
+    setTimeout(() => t.classList.remove('blocked'), 250);
+  }
+  const target = players.get(m.target);
+  if (target && target.ch && m.target !== myId) {
+    burst(new THREE.Vector3(target.x, 1.2, target.z), { count: 20, color: 0x66e0ff, speed: 4, life: 0.4 });
+  }
+}
+
+function showHitText(text, color) {
+  const ht = $('hitText');
+  ht.textContent = text; ht.style.color = color; ht.style.opacity = 1;
+  clearTimeout(showHitText.t);
+  showHitText.t = setTimeout(() => { ht.style.opacity = 0; }, 600);
+}
+
+function nameHtml(p) {
+  return p ? `<b style="color:${p.color}">${escapeHtml(p.name)}</b>` : '?';
+}
+function addFeedText(html) {
+  const d = document.createElement('div');
+  d.innerHTML = html;
+  $('killfeed').prepend(d);
+  setTimeout(() => { d.style.opacity = 0; }, 3500);
+  setTimeout(() => d.remove(), 4000);
+}
+
+// כפתורי הכוחות: זמן שנשאר / המתנה / מחיר
+function updatePowersHud(now) {
+  const rb = $('rapidBtn'), sb = $('shieldBtn');
+  const rapidActive = now < powers.rapidUntil;
+  const rapidCd = Math.max(0, powers.rapidReady - now);
+  rb.classList.toggle('active', rapidActive);
+  rb.classList.toggle('cooldown', !rapidActive && rapidCd > 0);
+  rb.querySelector('.pLabel').textContent = rapidActive
+    ? ((powers.rapidUntil - now) / 1000).toFixed(1)
+    : rapidCd > 0 ? Math.ceil(rapidCd / 1000) + 'ש' : 'חינם';
+  const cdTotal = cfg.rapidCooldownMs || 20000;
+  rb.style.setProperty('--cd', rapidActive ? 0 : Math.min(1, rapidCd / cdTotal));
+
+  const shieldActive = now < powers.shieldUntil;
+  const cost = cfg.shieldCost || 200;
+  sb.classList.toggle('active', shieldActive);
+  sb.classList.toggle('cooldown', !shieldActive && powers.money < cost);
+  sb.querySelector('.pLabel').textContent = shieldActive ? ((powers.shieldUntil - now) / 1000).toFixed(1) : '$' + cost;
+  sb.style.setProperty('--cd', 0);
+
+  const tint = $('powerTint');
+  tint.classList.toggle('rapid', rapidActive && me.alive);
+  tint.classList.toggle('shield', shieldActive && me.alive);
+}
+
+function usePower(kind) {
+  if (!inGame || gameOver || !me.alive) return;
+  send({ t: 'power', kind });
 }
 
 function onKill(m) {
@@ -798,9 +889,10 @@ function onKill(m) {
     fpRifle.visible = false;
   }
   if (m.killer === myId) {
-    const hm = $('hitMarker'), ht = $('hitText');
-    hm.style.opacity = 1; ht.textContent = 'הריגה!'; ht.style.opacity = 1;
-    setTimeout(() => { hm.style.opacity = 0; ht.style.opacity = 0; }, 600);
+    const hm = $('hitMarker');
+    hm.style.opacity = 1;
+    setTimeout(() => { hm.style.opacity = 0; }, 600);
+    showHitText('הריגה! +$100', '#ff4b3e');
   }
 }
 
@@ -904,7 +996,10 @@ function onTouchStart(e) {
   if (!inGame || e.target.closest('.ui')) return;
   e.preventDefault();
   for (const t of e.changedTouches) {
-    if (t.target === fireBtn || fireBtn.contains(t.target)) {
+    const pb = t.target.closest && t.target.closest('.powerBtn');
+    if (pb) {
+      usePower(pb.dataset.kind);
+    } else if (t.target === fireBtn || fireBtn.contains(t.target)) {
       fireTouch = { id: t.identifier, x: t.clientX, y: t.clientY };
       firing = true; fireBtn.classList.add('active');
       tryShoot(performance.now()); // גם טאפ קצר יורה מיד
@@ -953,7 +1048,12 @@ document.addEventListener('gesturestart', e => e.preventDefault());
 document.addEventListener('dblclick', e => e.preventDefault());
 
 // מקלדת ועכבר (לבדיקה במחשב): WASD + עכבר + קליק
-document.addEventListener('keydown', e => { keys[e.code] = true; });
+document.addEventListener('keydown', e => {
+  keys[e.code] = true;
+  if (e.code === 'KeyQ') usePower('rapid');
+  if (e.code === 'KeyE') usePower('shield');
+});
+for (const b of document.querySelectorAll('.powerBtn')) b.addEventListener('click', () => usePower(b.dataset.kind));
 document.addEventListener('keyup', e => { keys[e.code] = false; });
 renderer.domElement.addEventListener('click', () => {
   if (inGame && !gameOver && document.pointerLockElement !== renderer.domElement) renderer.domElement.requestPointerLock();
@@ -1034,7 +1134,8 @@ function clearDemo() {
 
 // ---------- לולאה ראשית ----------
 function tryShoot(now) {
-  if (me.alive && !gameOver && now - lastShotTime >= SHOOT_INTERVAL) shoot(now);
+  const interval = now < powers.rapidUntil ? RAPID_INTERVAL : SHOOT_INTERVAL;
+  if (me.alive && !gameOver && now - lastShotTime >= interval) shoot(now);
 }
 function shoot(now) {
   lastShotTime = now;
@@ -1122,9 +1223,12 @@ function loop(now) {
         p.z += (p.tz - p.z) * k;
       }
       updateCharacter(p.ch, p.x, p.z, p.yaw, p.alive, dt, now);
+      p.ch.bubble.visible = p.alive && p.shield;
+      if (p.shield) p.ch.bubble.material.opacity = 0.16 + 0.08 * Math.sin(now * 0.008);
     }
 
     updateArrows(now);
+    updatePowersHud(now);
 
     if (!me.alive) {
       const s = Math.max(0, Math.ceil((respawnAt - now) / 1000));

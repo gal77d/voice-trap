@@ -22,6 +22,16 @@ const MAX_PLAYERS = 4;
 const MAX_INPUTS_PER_TICK = 4;     // הגנה בסיסית מפני "ספידהאק"
 const COLORS = ['#ff4d4d', '#4da6ff', '#5cd65c', '#ffcc33'];
 
+// ---------- כוחות וכסף ----------
+const RAPID_MS = 3000;             // ⚡ ירי בלי המתנה ל-3 שניות (חינם)
+const RAPID_COOLDOWN_MS = 20000;   // ...ואז 20 שניות המתנה עד הפעם הבאה
+const RAPID_FIRE_MS = 70;          // גם בירי מהיר יש מינימום, כדי שלא יציפו את השרת
+const SHIELD_MS = 8000;            // 🛡 מגן ל-8 שניות
+const SHIELD_COST = 200;
+const KILL_REWARD = 100;
+const INCOME = 10;                 // כסף שמקבלים כל INCOME_MS
+const INCOME_MS = 5000;
+
 // ---------- המפה ----------
 // המפה משותפת לשרת וללקוח: public/map.json
 // כל קיר הוא תיבה: מרכז (x,z), רוחב w (ציר X), עומק d (ציר Z), גובה h
@@ -122,21 +132,53 @@ function roster(room) {
   return [...room.players.values()].map(p => ({ id: p.id, name: p.name, color: p.color, score: p.score }));
 }
 
+// מצב פרטי של השחקן (כסף וזמנים שנשארו), נשלח רק אליו
+function sendMe(p) {
+  const now = Date.now();
+  send(p.ws, {
+    t: 'me', money: p.money,
+    rapidLeft: Math.max(0, p.rapidUntil - now),
+    rapidCd: Math.max(0, p.rapidReadyAt - now),
+    shieldLeft: Math.max(0, p.shieldUntil - now),
+  });
+}
+
+function usePower(room, p, kind) {
+  const now = Date.now();
+  if (room.state !== 'play' || !p.alive) return;
+  if (kind === 'rapid') {
+    if (now < p.rapidReadyAt) return;
+    p.rapidUntil = now + RAPID_MS;
+    p.rapidReadyAt = p.rapidUntil + RAPID_COOLDOWN_MS;
+  } else if (kind === 'shield') {
+    if (p.money < SHIELD_COST || now < p.shieldUntil) return;
+    p.money -= SHIELD_COST;
+    p.shieldUntil = now + SHIELD_MS;
+  } else return;
+  broadcast(room, { t: 'power', id: p.id, kind });
+  sendMe(p);
+}
+
 function addPlayer(room, ws, name) {
   const used = new Set([...room.players.values()].map(p => p.color));
   const p = {
     id: nextId++, ws, name, color: COLORS.find(c => !used.has(c)),
     x: 0, z: 0, yaw: 0, pitch: 0, alive: true, respawnAt: 0,
     score: 0, lastShot: 0, inputs: [], ack: 0, side: pickSide(room),
+    money: 0, rapidUntil: 0, rapidReadyAt: 0, shieldUntil: 0,
   };
   room.players.set(p.id, p);
   spawn(room, p);
   ws.player = p; ws.room = room;
   send(ws, {
     t: 'joined', id: p.id, code: room.code,
-    cfg: { speed: MOVE_SPEED, radius: PLAYER_RADIUS, tick: TICK_RATE, win: room.win, eye: EYE_HEIGHT },
+    cfg: {
+      speed: MOVE_SPEED, radius: PLAYER_RADIUS, tick: TICK_RATE, win: room.win, eye: EYE_HEIGHT,
+      shieldCost: SHIELD_COST, rapidMs: RAPID_MS, rapidCooldownMs: RAPID_COOLDOWN_MS, shieldMs: SHIELD_MS,
+    },
     state: room.state,
   });
+  sendMe(p);
   broadcast(room, { t: 'roster', players: roster(room) });
 }
 
@@ -157,6 +199,7 @@ function removePlayer(ws) {
 function createRoom(win) {
   const room = { code: makeCode(), players: new Map(), state: 'play', win };
   room.timer = setInterval(() => tick(room), 1000 / TICK_RATE);
+  room.nextIncome = Date.now() + INCOME_MS;
   rooms.set(room.code, room);
   console.log(`room ${room.code} created`);
   return room;
@@ -177,17 +220,23 @@ function tick(room) {
     if (p.inputs.length > 30) p.inputs.length = 0; // לקוח מציף - מנקים
     if (!p.alive && room.state === 'play' && now >= p.respawnAt) spawn(room, p);
   }
+  if (room.state === 'play' && now >= room.nextIncome) {
+    room.nextIncome = now + INCOME_MS;
+    for (const p of room.players.values()) { p.money += INCOME; sendMe(p); }
+  }
   broadcast(room, {
     t: 's',
     p: [...room.players.values()].map(p => [
       p.id, +p.x.toFixed(3), +p.z.toFixed(3), +p.yaw.toFixed(3), +p.pitch.toFixed(3), p.alive ? 1 : 0, p.ack,
+      now < p.shieldUntil ? 1 : 0,
     ]),
   });
 }
 
 function handleShoot(room, p, yaw, pitch) {
   const now = Date.now();
-  if (room.state !== 'play' || !p.alive || now - p.lastShot < FIRE_COOLDOWN_MS) return;
+  const cooldown = now < p.rapidUntil ? RAPID_FIRE_MS : FIRE_COOLDOWN_MS;
+  if (room.state !== 'play' || !p.alive || now - p.lastShot < cooldown) return;
   p.lastShot = now;
   if (typeof yaw === 'number') p.yaw = yaw;
   if (typeof pitch === 'number') p.pitch = Math.max(-1.4, Math.min(1.4, pitch));
@@ -207,9 +256,19 @@ function handleShoot(room, p, yaw, pitch) {
   }
   if (!best) return;
 
+  // המגן בולע את הכדור
+  if (now < best.shieldUntil) {
+    broadcast(room, { t: 'block', shooter: p.id, target: best.id });
+    return;
+  }
+
   best.alive = false;
   best.respawnAt = now + RESPAWN_MS;
+  best.rapidUntil = 0;
   p.score++;
+  p.money += KILL_REWARD;
+  sendMe(p);
+  sendMe(best);
   broadcast(room, { t: 'kill', killer: p.id, victim: best.id, respawnMs: RESPAWN_MS });
   broadcast(room, { t: 'roster', players: roster(room) });
 
@@ -226,9 +285,11 @@ function restart(room, win) {
   room.win = cleanWin(win, room.win);
   for (const p of room.players.values()) {
     p.score = 0;
+    p.money = 0; p.rapidUntil = 0; p.rapidReadyAt = 0; p.shieldUntil = 0;
     p.alive = false; // כדי ש-spawn יפזר אותם
   }
-  for (const p of room.players.values()) spawn(room, p);
+  room.nextIncome = Date.now() + INCOME_MS;
+  for (const p of room.players.values()) { spawn(room, p); sendMe(p); }
   broadcast(room, { t: 'restart', win: room.win });
   broadcast(room, { t: 'roster', players: roster(room) });
 }
@@ -294,6 +355,8 @@ wss.on('connection', ws => {
       });
     } else if (m.t === 'shoot' && p) {
       handleShoot(room, p, m.yaw, m.pitch);
+    } else if (m.t === 'power' && p) {
+      usePower(room, p, m.kind);
     } else if (m.t === 'restart' && room) {
       restart(room, m.win);
     }
