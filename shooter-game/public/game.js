@@ -34,6 +34,11 @@ const arrowsEl = $('arrows'), deathMsg = $('deathMsg');
 
 $('nameInput').value = localStorage.getItem('name') || '';
 
+// באייפון אין API למסך מלא בדפדפן - רק "הוספה למסך הבית" פותחת את המשחק בלי סרגלים
+const IS_IOS = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+const IS_STANDALONE = navigator.standalone === true || matchMedia('(display-mode: fullscreen), (display-mode: standalone)').matches;
+if (IS_IOS && !IS_STANDALONE) $('installHint').classList.remove('hidden');
+
 // ---------- Renderer ----------
 const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, IS_TOUCH ? 1.5 : 2));
@@ -874,8 +879,14 @@ function setJoy(bx, by, kx, ky) {
   joyBase.style.transform = `translate(${bx}px, ${by}px)`;
   joyKnob.style.transform = `translate(${kx}px, ${ky}px)`;
 }
+// מרחק מהשוליים הבטוחים (המגרעת באייפון במסך מלא)
+const safeProbe = document.createElement('div');
+safeProbe.style.cssText = 'position:fixed;visibility:hidden;padding-left:env(safe-area-inset-left);padding-bottom:env(safe-area-inset-bottom)';
+document.body.appendChild(safeProbe);
 function resetJoy() {
-  setJoy(110, window.innerHeight - 110, 0, 0);
+  const cs = getComputedStyle(safeProbe);
+  const left = parseFloat(cs.paddingLeft) || 0, bottom = parseFloat(cs.paddingBottom) || 0;
+  setJoy(110 + left, window.innerHeight - 110 - bottom, 0, 0);
   input.mx = 0; input.mz = 0;
 }
 resetJoy();

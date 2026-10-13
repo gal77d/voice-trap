@@ -76,6 +76,16 @@ html, body {
 .ui .row input { width: 120px; text-transform: uppercase; letter-spacing: 6px; font-weight: 700; }
 .divider { font-size: 12px; opacity: 0.6; }
 #menuError { color: #ff8a80; min-height: 20px; font-size: 14px; }
+#installHint {
+  max-width: 300px; font-size: 13px; line-height: 1.5; text-align: center;
+  padding: 8px 12px; border-radius: 10px;
+  background: rgba(75,139,255,0.15); border: 1px solid rgba(75,139,255,0.4);
+}
+.shareIcon {
+  display: inline-block; width: 12px; height: 14px; vertical-align: -2px;
+  border: 2px solid #fff; border-top: none; border-radius: 0 0 2px 2px; position: relative; margin: 0 2px;
+}
+.shareIcon::before { content: ""; position: absolute; left: 3px; top: -7px; width: 2px; height: 11px; background: #fff; }
 
 #loading { z-index: 30; background: #0b0f1a; font-size: 16px; }
 .spinner {
@@ -207,3 +217,16 @@ html, body {
   font-size: 26px; font-weight: 900; direction: rtl; text-shadow: 0 0 8px #000; gap: 6px;
 }
 #deathMsg small { font-size: 18px; font-weight: 400; opacity: 0.9; }
+
+/* מסכים נמוכים (טלפון לרוחב): תפריט צפוף יותר */
+@media (max-height: 430px) {
+  .card { gap: 6px; padding: 10px 20px; }
+  .ui h1 { font-size: 26px; }
+  .ui .sub { font-size: 12px; }
+  .ui input, .ui button { font-size: 15px; padding: 7px 14px; }
+  .divider { display: none; }
+  #menuError { min-height: 0; }
+  #installHint { font-size: 12px; padding: 5px 10px; max-width: 340px; }
+  #installHint:not(.hidden) ~ * { display: none; }
+  .card:has(#installHint:not(.hidden)) .sub { display: none; }
+}

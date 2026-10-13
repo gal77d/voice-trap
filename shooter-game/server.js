@@ -229,6 +229,7 @@ const MIME = {
   '.html': 'text/html; charset=utf-8',
   '.json': 'application/json; charset=utf-8',
   '.glb': 'model/gltf-binary',
+  '.webmanifest': 'application/manifest+json',
   '.js': 'text/javascript; charset=utf-8',
   '.css': 'text/css; charset=utf-8',
   '.png': 'image/png',
