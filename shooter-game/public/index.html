@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="he">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>Shot Arrow</title>
+  <link rel="stylesheet" href="style.css">
+  <script type="importmap">
+    { "imports": { "three": "https://unpkg.com/three@0.160.0/build/three.module.js" } }
+  </script>
+</head>
+<body>
+  <div id="game"></div>
+
+  <!-- HUD בזמן משחק -->
+  <div id="hud" class="hidden">
+    <div id="roomCode"></div>
+    <div id="scoreboard"></div>
+    <div id="killfeed"></div>
+    <div id="crosshair"></div>
+    <div id="hitText"></div>
+    <div id="arrows"></div>
+    <div id="joyBase"><div id="joyKnob"></div></div>
+    <div id="fireBtn">🔫</div>
+    <div id="deathMsg" class="hidden"></div>
+  </div>
+
+  <!-- תפריט פתיחה -->
+  <div id="menu" class="ui" dir="rtl">
+    <h1>🎯 Shot Arrow</h1>
+    <p class="sub">שמעת יריה? החץ יראה לך מאיפה. תירה דרך הקיר!</p>
+    <input id="nameInput" maxlength="12" placeholder="השם שלך" autocomplete="off">
+    <button id="createBtn">צור חדר חדש</button>
+    <div class="row">
+      <input id="codeInput" maxlength="4" placeholder="קוד" autocomplete="off" autocapitalize="characters">
+      <button id="joinBtn">הצטרף</button>
+    </div>
+    <div id="menuError"></div>
+  </div>
+
+  <!-- מסך סיכום -->
+  <div id="over" class="ui hidden" dir="rtl">
+    <h2 id="overTitle"></h2>
+    <div id="overBoard"></div>
+    <button id="restartBtn">משחק חדש</button>
+  </div>
+
+  <!-- בקשה לסובב את המסך -->
+  <div id="rotate" class="ui" dir="rtl">📱↻<br>סובב את הטלפון לרוחב</div>
+
+  <script type="module" src="game.js"></script>
+</body>
+</html>
