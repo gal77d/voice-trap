@@ -17,7 +17,7 @@ const HIT_RADIUS = 0.5;            // רדיוס פגיעה (קצת נדיב י�
 const EYE_HEIGHT = 1.6;
 const FIRE_COOLDOWN_MS = 300;             // הלקוח יורה כל 350ms, מרווח קטן לג׳יטר ברשת
 const RESPAWN_MS = 3000;
-const WIN_SCORE = 10;
+const MAX_WIN_SCORE = 10;           // היוצר בוחר עד כמה נקודות (1-10)
 const MAX_PLAYERS = 4;
 const MAX_INPUTS_PER_TICK = 4;     // הגנה בסיסית מפני "ספידהאק"
 const COLORS = ['#ff4d4d', '#4da6ff', '#5cd65c', '#ffcc33'];
@@ -85,10 +85,19 @@ function makeCode() {
   return code;
 }
 
+// כל שחקן שייך לבסיס: צד אחד של הקיר המרכזי (-1 = z שלילי, 1 = z חיובי)
+function pickSide(room) {
+  let neg = 0, pos = 0;
+  for (const p of room.players.values()) p.side < 0 ? neg++ : pos++;
+  if (neg !== pos) return neg < pos ? -1 : 1;
+  return Math.random() < 0.5 ? -1 : 1;
+}
+
 function pickSpawn(room, self) {
+  const mine = SPAWNS.filter(s => Math.sign(s.z) === self.side); // רק בבסיס שלך
   const others = [...room.players.values()].filter(p => p !== self && p.alive);
-  const safe = SPAWNS.filter(s => others.every(o => Math.hypot(o.x - s.x, o.z - s.z) > 8));
-  const list = safe.length ? safe : SPAWNS;
+  const safe = mine.filter(s => others.every(o => Math.hypot(o.x - s.x, o.z - s.z) > 8));
+  const list = safe.length ? safe : mine;
   return list[Math.floor(Math.random() * list.length)];
 }
 
@@ -118,14 +127,14 @@ function addPlayer(room, ws, name) {
   const p = {
     id: nextId++, ws, name, color: COLORS.find(c => !used.has(c)),
     x: 0, z: 0, yaw: 0, pitch: 0, alive: true, respawnAt: 0,
-    score: 0, lastShot: 0, inputs: [], ack: 0,
+    score: 0, lastShot: 0, inputs: [], ack: 0, side: pickSide(room),
   };
   room.players.set(p.id, p);
   spawn(room, p);
   ws.player = p; ws.room = room;
   send(ws, {
     t: 'joined', id: p.id, code: room.code,
-    cfg: { speed: MOVE_SPEED, radius: PLAYER_RADIUS, tick: TICK_RATE, win: WIN_SCORE, eye: EYE_HEIGHT },
+    cfg: { speed: MOVE_SPEED, radius: PLAYER_RADIUS, tick: TICK_RATE, win: room.win, eye: EYE_HEIGHT },
     state: room.state,
   });
   broadcast(room, { t: 'roster', players: roster(room) });
@@ -145,8 +154,8 @@ function removePlayer(ws) {
   }
 }
 
-function createRoom() {
-  const room = { code: makeCode(), players: new Map(), state: 'play' };
+function createRoom(win) {
+  const room = { code: makeCode(), players: new Map(), state: 'play', win };
   room.timer = setInterval(() => tick(room), 1000 / TICK_RATE);
   rooms.set(room.code, room);
   console.log(`room ${room.code} created`);
@@ -204,22 +213,23 @@ function handleShoot(room, p, yaw, pitch) {
   broadcast(room, { t: 'kill', killer: p.id, victim: best.id, respawnMs: RESPAWN_MS });
   broadcast(room, { t: 'roster', players: roster(room) });
 
-  if (p.score >= WIN_SCORE) {
+  if (p.score >= room.win) {
     room.state = 'over';
     const board = roster(room).sort((a, b) => b.score - a.score);
     broadcast(room, { t: 'over', winner: p.id, board });
   }
 }
 
-function restart(room) {
+function restart(room, win) {
   if (room.state !== 'over') return;
   room.state = 'play';
+  room.win = cleanWin(win, room.win);
   for (const p of room.players.values()) {
     p.score = 0;
     p.alive = false; // כדי ש-spawn יפזר אותם
   }
   for (const p of room.players.values()) spawn(room, p);
-  broadcast(room, { t: 'restart' });
+  broadcast(room, { t: 'restart', win: room.win });
   broadcast(room, { t: 'roster', players: roster(room) });
 }
 
@@ -267,7 +277,7 @@ wss.on('connection', ws => {
     const room = ws.room, p = ws.player;
 
     if (m.t === 'create' && !room) {
-      addPlayer(createRoom(), ws, cleanName(m.name));
+      addPlayer(createRoom(cleanWin(m.win, MAX_WIN_SCORE)), ws, cleanName(m.name));
     } else if (m.t === 'join' && !room) {
       const r = rooms.get(String(m.code || '').toUpperCase().trim());
       if (!r) return send(ws, { t: 'error', msg: 'חדר לא נמצא' });
@@ -285,7 +295,7 @@ wss.on('connection', ws => {
     } else if (m.t === 'shoot' && p) {
       handleShoot(room, p, m.yaw, m.pitch);
     } else if (m.t === 'restart' && room) {
-      restart(room);
+      restart(room, m.win);
     }
   });
   ws.on('close', () => removePlayer(ws));
@@ -301,6 +311,10 @@ setInterval(() => {
 }, 10000);
 
 function clamp(v, a, b) { return Math.max(a, Math.min(b, v)); }
+function cleanWin(w, fallback) {
+  w = Math.round(+w);
+  return w >= 1 && w <= MAX_WIN_SCORE ? w : fallback;
+}
 function cleanName(n) {
   n = String(n || '').trim().slice(0, 12);
   return n || 'שחקן';

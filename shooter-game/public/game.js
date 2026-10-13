@@ -740,6 +740,8 @@ function handle(m) {
     case 'kill': onKill(m); break;
     case 'over': onOver(m); break;
     case 'restart':
+      cfg.win = m.win;
+      renderScoreboard();
       gameOver = false;
       overEl.classList.add('hidden');
       break;
@@ -809,6 +811,7 @@ function onOver(m) {
   $('overBoard').innerHTML = m.board.map((p, i) =>
     `<div class="line" style="color:${p.color}"><span>${i + 1}. ${escapeHtml(p.name)}${p.id === myId ? ' (אתה)' : ''}</span><span>${p.score}</span></div>`
   ).join('');
+  $('winSelect2').value = cfg.win;
   overEl.classList.remove('hidden');
   firing = false; fireBtn.classList.remove('active');
 }
@@ -983,13 +986,19 @@ function startGame(msg) {
   }
   connect(() => { $('menuError').textContent = ''; send(msg); });
 }
-$('createBtn').onclick = () => startGame({ t: 'create' });
+// בחירת ניקוד לניצחון (1-10), נשמר לפעם הבאה
+for (const id of ['winSelect', 'winSelect2']) {
+  for (let i = 1; i <= 10; i++) $(id).add(new Option(i, i));
+}
+$('winSelect').value = localStorage.getItem('win') || 10;
+$('winSelect').onchange = () => localStorage.setItem('win', $('winSelect').value);
+$('createBtn').onclick = () => startGame({ t: 'create', win: +$('winSelect').value });
 $('joinBtn').onclick = () => {
   const code = $('codeInput').value.trim().toUpperCase();
   if (code.length !== 4) { $('menuError').textContent = 'הקוד צריך להיות 4 אותיות'; return; }
   startGame({ t: 'join', code });
 };
-$('restartBtn').onclick = () => send({ t: 'restart' });
+$('restartBtn').onclick = () => send({ t: 'restart', win: +$('winSelect2').value });
 
 // בדיקת גודל המסך בכל פריים: באייפון (במיוחד ממסך הבית) אירוע resize
 // לא תמיד מגיע אחרי סיבוב, והתמונה נשארת בגודל של מצב עמידה

@@ -50,6 +50,11 @@
       <h1>SHOT<span>ARROW</span></h1>
       <p class="sub">שמעת יריה? החץ יראה לך מאיפה.<br>הקיר באמצע עוצר את העין, לא את הכדור.</p>
       <input id="nameInput" maxlength="12" placeholder="השם שלך" autocomplete="off">
+      <div class="row winRow">
+        <label for="winSelect">משחק עד</label>
+        <select id="winSelect"></select>
+        <span>נקודות</span>
+      </div>
       <button id="createBtn">צור חדר חדש</button>
       <div class="divider">או הצטרף לחברים</div>
       <div class="row">
@@ -72,6 +77,11 @@
     <div class="card">
       <h2 id="overTitle"></h2>
       <div id="overBoard"></div>
+      <div class="row winRow">
+        <label for="winSelect2">המשחק הבא עד</label>
+        <select id="winSelect2"></select>
+        <span>נקודות</span>
+      </div>
       <button id="restartBtn">משחק חדש</button>
     </div>
   </div>

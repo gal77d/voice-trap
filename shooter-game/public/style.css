@@ -76,6 +76,15 @@ html, body {
 .ui .row input { width: 120px; text-transform: uppercase; letter-spacing: 6px; font-weight: 700; }
 .divider { font-size: 12px; opacity: 0.6; }
 #menuError { color: #ff8a80; min-height: 20px; font-size: 14px; }
+.winRow { align-items: center; font-size: 15px; }
+.winRow select {
+  font-family: inherit; font-size: 17px; font-weight: 700;
+  padding: 5px 10px; border-radius: 10px;
+  background: rgba(255,255,255,0.1); color: #fff;
+  border: 1px solid rgba(255,255,255,0.25);
+  touch-action: manipulation;
+}
+.winRow select option { color: #000; }
 #installHint {
   max-width: 300px; font-size: 13px; line-height: 1.5; text-align: center;
   padding: 8px 12px; border-radius: 10px;
