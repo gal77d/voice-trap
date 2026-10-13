@@ -4,6 +4,7 @@ const fs = require('fs');
 const path = require('path');
 const { WebSocketServer } = require('ws');
 const { makeBasesMap, makeOpenMap, distToWall } = require('./maps');
+const { createPokerWss } = require('./poker');
 
 const PORT = process.env.PORT || 3000;
 const PUBLIC_DIR = path.join(__dirname, 'public');
@@ -325,7 +326,8 @@ const MIME = {
 const MENU_MAP = makeBasesMap(2);
 const server = http.createServer((req, res) => {
   let urlPath = decodeURIComponent(req.url.split('?')[0]);
-  if (urlPath === '/') urlPath = '/index.html';
+  if (urlPath === '/poker') { res.writeHead(301, { Location: '/poker/' }); return res.end(); }
+  if (urlPath.endsWith('/')) urlPath += 'index.html';
   if (urlPath === '/api/menu-map') { // מפה לרקע של התפריט
     res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'public, max-age=3600' });
     return res.end(JSON.stringify(MENU_MAP));
@@ -349,7 +351,12 @@ const server = http.createServer((req, res) => {
 });
 
 // ---------- WebSocket ----------
-const wss = new WebSocketServer({ server });
+const wss = new WebSocketServer({ noServer: true });
+const pokerWss = createPokerWss(); // פוקר עם חברים: /poker-ws
+server.on('upgrade', (req, socket, head) => {
+  const target = req.url.startsWith('/poker-ws') ? pokerWss : wss;
+  target.handleUpgrade(req, socket, head, ws => target.emit('connection', ws, req));
+});
 wss.on('connection', ws => {
   ws.isAlive = true;
   ws.on('pong', () => { ws.isAlive = true; });
