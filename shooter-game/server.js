@@ -3,6 +3,7 @@ const http = require('http');
 const fs = require('fs');
 const path = require('path');
 const { WebSocketServer } = require('ws');
+const { makeBasesMap, makeOpenMap, distToWall } = require('./maps');
 
 const PORT = process.env.PORT || 3000;
 const PUBLIC_DIR = path.join(__dirname, 'public');
@@ -26,39 +27,28 @@ const COLORS = ['#ff4d4d', '#4da6ff', '#5cd65c', '#ffcc33'];
 const SCOPE_MS = 3000;             // 🎯 כוונת סנייפר שרואה יריבים דרך קירות ל-3 שניות (חינם)
 const SCOPE_COOLDOWN_MS = 20000;   // ...ואז 20 שניות המתנה עד הפעם הבאה
 const SHIELD_MS = 8000;            // 🛡 מגן ל-8 שניות
-const SHIELD_COST = 200;
+const SHIELD_COST = 300;
 const KILL_REWARD = 100;
 const INCOME = 10;                 // כסף שמקבלים כל INCOME_MS
 const INCOME_MS = 5000;
 
-// ---------- המפה ----------
-// המפה משותפת לשרת וללקוח: public/map.json
-// כל קיר הוא תיבה: מרכז (x,z), רוחב w (ציר X), עומק d (ציר Z), גובה h
-const MAP = JSON.parse(fs.readFileSync(path.join(PUBLIC_DIR, 'map.json'), 'utf8'));
-const WALLS = MAP.walls;
-const SPAWNS = MAP.spawns;
-
 // ---------- פיזיקה ----------
-function collidesWall(x, z) {
-  for (const w of WALLS) {
-    const cx = Math.max(w.x - w.w / 2, Math.min(x, w.x + w.w / 2));
-    const cz = Math.max(w.z - w.d / 2, Math.min(z, w.z + w.d / 2));
-    const dx = x - cx, dz = z - cz;
-    if (dx * dx + dz * dz < PLAYER_RADIUS * PLAYER_RADIUS) return true;
-  }
+// המפות נוצרות ב-maps.js; לכל חדר יש מפה משלו (room.map)
+function collidesWall(walls, x, z) {
+  for (const w of walls) if (distToWall(w, x, z) < PLAYER_RADIUS) return true;
   return false;
 }
 
 // אותה פונקציה בדיוק קיימת בלקוח (לחיזוי תנועה)
-function applyMove(p, mx, mz, yaw) {
+function applyMove(walls, p, mx, mz, yaw) {
   let len = Math.hypot(mx, mz);
   if (len > 1) { mx /= len; mz /= len; }
   const fx = -Math.sin(yaw), fz = -Math.cos(yaw);   // קדימה
   const rx = Math.cos(yaw), rz = -Math.sin(yaw);    // ימינה
   const vx = (fx * mz + rx * mx) * MOVE_SPEED * DT;
   const vz = (fz * mz + rz * mx) * MOVE_SPEED * DT;
-  if (!collidesWall(p.x + vx, p.z)) p.x += vx;
-  if (!collidesWall(p.x, p.z + vz)) p.z += vz;
+  if (!collidesWall(walls, p.x + vx, p.z)) p.x += vx;
+  if (!collidesWall(walls, p.x, p.z + vz)) p.z += vz;
 }
 
 // בדיקת פגיעה: קרן ישרה מול גליל אנכי. קירות לא נלקחים בחשבון בכוונה!
@@ -94,16 +84,34 @@ function makeCode() {
   return code;
 }
 
-// כל שחקן שייך לבסיס: צד אחד של הקיר המרכזי (-1 = z שלילי, 1 = z חיובי)
-function pickSide(room) {
-  let neg = 0, pos = 0;
-  for (const p of room.players.values()) p.side < 0 ? neg++ : pos++;
-  if (neg !== pos) return neg < pos ? -1 : 1;
-  return Math.random() < 0.5 ? -1 : 1;
+// מצב בסיסים: מספר הבסיסים = מספר השחקנים (2 עד 4), לכל שחקן בסיס משלו
+function basesCount(room) { return Math.max(2, Math.min(4, room.players.size)); }
+
+// בונה מחדש את המפה אם מספר הבסיסים השתנה, ומחלק בסיסים לפי סדר הכניסה
+function updateLayout(room, newcomer) {
+  if (room.mode !== 'bases') return;
+  const n = basesCount(room);
+  if (room.map && room.map.sectors === n) {
+    if (newcomer) {
+      const used = new Set([...room.players.values()].filter(p => p !== newcomer).map(p => p.sector));
+      newcomer.sector = [...Array(n).keys()].find(k => !used.has(k)) ?? 0;
+    }
+    return;
+  }
+  room.map = makeBasesMap(n);
+  let k = 0;
+  for (const p of room.players.values()) p.sector = k++ % n;
+  for (const p of room.players.values()) {
+    if (p === newcomer) continue;
+    p.inputs.length = 0;
+    spawn(room, p);
+    send(p.ws, { t: 'map', map: room.map });
+  }
 }
 
 function pickSpawn(room, self) {
-  const mine = SPAWNS.filter(s => Math.sign(s.z) === self.side); // רק בבסיס שלך
+  const all = room.map.spawns;
+  const mine = room.mode === 'bases' ? all.filter(s => s.sector === self.sector) : all; // רק בבסיס שלך
   const others = [...room.players.values()].filter(p => p !== self && p.alive);
   const safe = mine.filter(s => others.every(o => Math.hypot(o.x - s.x, o.z - s.z) > 8));
   const list = safe.length ? safe : mine;
@@ -163,14 +171,15 @@ function addPlayer(room, ws, name) {
   const p = {
     id: nextId++, ws, name, color: COLORS.find(c => !used.has(c)),
     x: 0, z: 0, yaw: 0, pitch: 0, alive: true, respawnAt: 0,
-    score: 0, lastShot: 0, inputs: [], ack: 0, side: pickSide(room),
+    score: 0, lastShot: 0, inputs: [], ack: 0, sector: 0,
     money: 0, scopeUntil: 0, scopeReadyAt: 0, shieldUntil: 0,
   };
   room.players.set(p.id, p);
+  updateLayout(room, p);
   spawn(room, p);
   ws.player = p; ws.room = room;
   send(ws, {
-    t: 'joined', id: p.id, code: room.code,
+    t: 'joined', id: p.id, code: room.code, mode: room.mode, map: room.map,
     cfg: {
       speed: MOVE_SPEED, radius: PLAYER_RADIUS, tick: TICK_RATE, win: room.win, eye: EYE_HEIGHT,
       shieldCost: SHIELD_COST, scopeMs: SCOPE_MS, scopeCooldownMs: SCOPE_COOLDOWN_MS, shieldMs: SHIELD_MS,
@@ -191,12 +200,17 @@ function removePlayer(ws) {
     rooms.delete(room.code);
     console.log(`room ${room.code} closed`);
   } else {
+    updateLayout(room, null);
     broadcast(room, { t: 'roster', players: roster(room) });
   }
 }
 
-function createRoom(win) {
-  const room = { code: makeCode(), players: new Map(), state: 'play', win };
+function createRoom(win, mode) {
+  mode = mode === 'open' ? 'open' : 'bases';
+  const room = {
+    code: makeCode(), players: new Map(), state: 'play', win, mode,
+    map: mode === 'open' ? makeOpenMap(Math.floor(Math.random() * 1e9)) : makeBasesMap(2),
+  };
   room.timer = setInterval(() => tick(room), 1000 / TICK_RATE);
   room.nextIncome = Date.now() + INCOME_MS;
   rooms.set(room.code, room);
@@ -214,7 +228,7 @@ function tick(room) {
       n++;
       p.ack = inp.seq;
       p.yaw = inp.yaw; p.pitch = inp.pitch;
-      if (p.alive && room.state === 'play') applyMove(p, inp.mx, inp.mz, inp.yaw);
+      if (p.alive && room.state === 'play') applyMove(room.map.walls, p, inp.mx, inp.mz, inp.yaw);
     }
     if (p.inputs.length > 30) p.inputs.length = 0; // לקוח מציף - מנקים
     if (!p.alive && room.state === 'play' && now >= p.respawnAt) spawn(room, p);
@@ -287,7 +301,11 @@ function restart(room, win) {
     p.alive = false; // כדי ש-spawn יפזר אותם
   }
   room.nextIncome = Date.now() + INCOME_MS;
-  for (const p of room.players.values()) { spawn(room, p); sendMe(p); }
+  if (room.mode === 'open') { // מפה ענקית חדשה בכל משחק
+    room.map = makeOpenMap(Math.floor(Math.random() * 1e9));
+    broadcast(room, { t: 'map', map: room.map });
+  }
+  for (const p of room.players.values()) { p.inputs.length = 0; spawn(room, p); sendMe(p); }
   broadcast(room, { t: 'restart', win: room.win });
   broadcast(room, { t: 'roster', players: roster(room) });
 }
@@ -304,9 +322,14 @@ const MIME = {
   '.png': 'image/png',
   '.ico': 'image/x-icon',
 };
+const MENU_MAP = makeBasesMap(2);
 const server = http.createServer((req, res) => {
   let urlPath = decodeURIComponent(req.url.split('?')[0]);
   if (urlPath === '/') urlPath = '/index.html';
+  if (urlPath === '/api/menu-map') { // מפה לרקע של התפריט
+    res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'public, max-age=3600' });
+    return res.end(JSON.stringify(MENU_MAP));
+  }
   // Three.js מוגש מ-node_modules, כך שלא צריך CDN חיצוני
   let base = PUBLIC_DIR;
   if (urlPath.startsWith('/vendor/three/')) {
@@ -336,7 +359,7 @@ wss.on('connection', ws => {
     const room = ws.room, p = ws.player;
 
     if (m.t === 'create' && !room) {
-      addPlayer(createRoom(cleanWin(m.win, MAX_WIN_SCORE)), ws, cleanName(m.name));
+      addPlayer(createRoom(cleanWin(m.win, MAX_WIN_SCORE), m.mode), ws, cleanName(m.name));
     } else if (m.t === 'join' && !room) {
       const r = rooms.get(String(m.code || '').toUpperCase().trim());
       if (!r) return send(ws, { t: 'error', msg: 'חדר לא נמצא' });

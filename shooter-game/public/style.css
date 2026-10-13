@@ -77,6 +77,12 @@ html, body {
 .divider { font-size: 12px; opacity: 0.6; }
 #menuError { color: #ff8a80; min-height: 20px; font-size: 14px; }
 .winRow { align-items: center; font-size: 15px; }
+.modeRow { gap: 6px; }
+.ui button.modeBtn {
+  min-width: 0; font-size: 14px; padding: 7px 12px; box-shadow: none;
+  background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.2); color: rgba(255,255,255,0.75);
+}
+.ui button.modeBtn.active { background: rgba(255,122,69,0.25); border-color: #ff7a45; color: #fff; }
 .winRow select {
   font-family: inherit; font-size: 17px; font-weight: 700;
   padding: 5px 10px; border-radius: 10px;

@@ -27,6 +27,7 @@ const NORMAL_FOV = 72;
 // כוחות: זמנים מקומיים (performance.now) לפי מה שהשרת שולח
 const powers = { money: 0, scopeUntil: 0, scopeReady: 0, shieldUntil: 0 };
 let scoping = false;
+let adoptYaw = false;
 const ARROW_MS = 3000;
 let lastShotTime = 0;
 const IS_TOUCH = 'ontouchstart' in window;
@@ -90,6 +91,7 @@ sc.left = -26; sc.right = 26; sc.top = 26; sc.bottom = -26; sc.near = 5; sc.far 
 sun.shadow.bias = -0.0004;
 sun.shadow.normalBias = 0.03;
 scene.add(sun);
+scene.add(sun.target);
 
 // הבזק מהנשק שלי - מאיר את הסביבה לרגע
 const flashLight = new THREE.PointLight(0xffb060, 0, 9, 2);
@@ -246,6 +248,55 @@ function buildTextures() {
     }
     addNoise(g, s, 30);
   })) };
+  // דשא (למפה הענקית)
+  TEX.grass = texSet(makeCanvas(512, (g, s) => {
+    g.fillStyle = '#4f6b34'; g.fillRect(0, 0, s, s);
+    blotches(g, s, 90, 'rgba(90,120,50,A)', 60, 0.5);
+    blotches(g, s, 60, 'rgba(60,50,30,A)', 40, 0.35);
+    for (let i = 0; i < 5000; i++) { // עלי דשא
+      const x = Math.random() * s, y = Math.random() * s, l = 3 + Math.random() * 6;
+      g.strokeStyle = `rgba(${90 + Math.random() * 60},${120 + Math.random() * 60},${40 + Math.random() * 30},0.6)`;
+      g.lineWidth = 1;
+      g.beginPath(); g.moveTo(x, y); g.lineTo(x + (Math.random() - 0.5) * 3, y - l); g.stroke();
+    }
+    addNoise(g, s, 20);
+  }), 2);
+  // מתכת מגולית (מכולות) - אפורה, הצבע בא מהחומר
+  TEX.ribbed = texSet(makeCanvas(256, (g, s) => {
+    g.fillStyle = '#d0d0d0'; g.fillRect(0, 0, s, s);
+    for (let x = 0; x < s; x += 16) {
+      const gr = g.createLinearGradient(x, 0, x + 16, 0);
+      gr.addColorStop(0, '#9a9a9a'); gr.addColorStop(0.5, '#f0f0f0'); gr.addColorStop(1, '#9a9a9a');
+      g.fillStyle = gr; g.fillRect(x, 0, 16, s);
+    }
+    blotches(g, s, 30, 'rgba(110,70,40,A)', 25, 0.4); // חלודה
+    g.fillStyle = 'rgba(60,60,60,0.8)'; g.fillRect(0, 0, s, 6); g.fillRect(0, s - 6, s, 6);
+    addNoise(g, s, 20);
+  }), 3);
+  // שקי חול
+  TEX.sandbag = texSet(makeCanvas(256, (g, s) => {
+    g.fillStyle = '#8a7a58'; g.fillRect(0, 0, s, s);
+    const rows = 4, bh = s / rows, bw = s / 2;
+    for (let r = 0; r < rows; r++) for (let c = -1; c < 3; c++) {
+      const x = c * bw + (r % 2 ? bw / 2 : 0) + bw / 2, y = r * bh + bh / 2;
+      const gr = g.createRadialGradient(x, y, 2, x, y, bw / 2);
+      gr.addColorStop(0, '#c4b083'); gr.addColorStop(0.8, '#a08c62'); gr.addColorStop(1, '#5e5038');
+      g.fillStyle = gr;
+      g.beginPath(); g.ellipse(x, y, bw / 2 - 3, bh / 2 - 3, 0, 0, 7); g.fill();
+    }
+    addNoise(g, s, 30);
+  }), 4);
+  // קליפת עץ
+  TEX.bark = texSet(makeCanvas(128, (g, s) => {
+    g.fillStyle = '#5a4130'; g.fillRect(0, 0, s, s);
+    for (let i = 0; i < 40; i++) {
+      g.strokeStyle = `rgba(${30 + Math.random() * 30},${20 + Math.random() * 20},10,0.7)`;
+      g.lineWidth = 1 + Math.random() * 3;
+      const x = Math.random() * s;
+      g.beginPath(); g.moveTo(x, 0); g.bezierCurveTo(x + 6, s * 0.3, x - 6, s * 0.6, x + 2, s); g.stroke();
+    }
+    addNoise(g, s, 25);
+  }), 4);
   // חור כדור
   TEX.hole = toTexture(makeCanvas(64, (g, s) => {
     const gr = g.createRadialGradient(s / 2, s / 2, 0, s / 2, s / 2, s / 2);
@@ -288,27 +339,18 @@ function boxMapped(w, h, d, tile) {
 }
 
 // ---------- בניית המפה ----------
+// המפה מגיעה מהשרת (maps.js). כל דבר הוא תיבה עם סיבוב rot וסוג type
 const wallMeshes = []; // למטרת פגיעות ויזואליות (חורים וניצוצות)
-function buildMap() {
-  const W = map.width, D = map.depth;
-  const floorGeo = new THREE.PlaneGeometry(W + 2, D + 2);
-  floorGeo.attributes.uv.array.forEach((v, i, a) => { a[i] = v * (i % 2 ? (D + 2) : (W + 2)) / 4; });
-  const floor = new THREE.Mesh(floorGeo, new THREE.MeshStandardMaterial({
-    ...TEX.floor, roughness: 0.92, metalness: 0, normalScale: new THREE.Vector2(0.8, 0.8), envMapIntensity: 0.3,
-  }));
-  floor.rotation.x = -Math.PI / 2;
-  floor.receiveShadow = true;
-  scene.add(floor);
-  wallMeshes.push(floor);
+let mapGroup = null;
+let MATS = null;
 
-  // קרקע מסביב לזירה
-  const outer = new THREE.Mesh(new THREE.PlaneGeometry(400, 400), new THREE.MeshStandardMaterial({ color: 0x6d7a55, roughness: 1 }));
-  outer.rotation.x = -Math.PI / 2; outer.position.y = -0.02;
-  outer.receiveShadow = true;
-  scene.add(outer);
-
+function mapMaterials() {
+  if (MATS) return MATS;
   const std = (p) => new THREE.MeshStandardMaterial({ envMapIntensity: 0.3, ...p });
-  const mats = {
+  MATS = {
+    concreteFloor: std({ ...TEX.floor, roughness: 0.92, normalScale: new THREE.Vector2(0.8, 0.8) }),
+    grassFloor: std({ ...TEX.grass, roughness: 1, normalScale: new THREE.Vector2(0.6, 0.6) }),
+    outer: std({ color: 0x6d7a55, roughness: 1 }),
     boundary: std({ ...TEX.brick, roughness: 0.9 }),
     center: std({ ...TEX.concrete, roughness: 0.85 }),
     wall: std({ ...TEX.concrete, roughness: 0.85, color: 0xd8d2c4 }),
@@ -316,46 +358,123 @@ function buildMap() {
     barrel: std({ ...TEX.barrel, roughness: 0.45, metalness: 0.55, envMapIntensity: 0.8 }),
     cap: std({ color: 0x5b5d61, roughness: 0.5, metalness: 0.6, envMapIntensity: 0.8 }),
     hazard: std({ ...TEX.hazard, roughness: 0.7 }),
+    sandbag: std({ ...TEX.sandbag, roughness: 1 }),
+    trunk: std({ ...TEX.bark, roughness: 1 }),
+    leaves: [0x3f6b2a, 0x4d7a2f, 0x355c26].map(c => std({ color: c, roughness: 0.95, flatShading: true })),
+    container: {},
+  };
+  return MATS;
+}
+function containerMat(color) {
+  const m = mapMaterials();
+  if (!m.container[color]) {
+    m.container[color] = new THREE.MeshStandardMaterial({
+      ...TEX.ribbed, color, roughness: 0.55, metalness: 0.5, envMapIntensity: 0.7,
+    });
+  }
+  return m.container[color];
+}
+
+function clearMap() {
+  if (!mapGroup) return;
+  scene.remove(mapGroup);
+  mapGroup.traverse(o => { if (o.geometry) o.geometry.dispose(); });
+  mapGroup = null;
+  wallMeshes.length = 0;
+  for (const h of holes) { scene.remove(h); h.material.dispose(); }
+  holes.length = 0;
+}
+
+function buildMap() {
+  clearMap();
+  const M = mapMaterials();
+  mapGroup = new THREE.Group();
+  scene.add(mapGroup);
+  const add = (obj, solid = true) => {
+    obj.traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
+    mapGroup.add(obj);
+    if (solid) wallMeshes.push(obj);
+    return obj;
   };
 
-  for (const w of map.walls) {
-    let mesh;
-    if (w.type === 'barrel') {
-      mesh = new THREE.Mesh(new THREE.CylinderGeometry(w.w * 0.45, w.w * 0.45, w.h, 24), mats.barrel);
-      const lid = new THREE.Mesh(new THREE.CylinderGeometry(w.w * 0.46, w.w * 0.46, 0.04, 24), mats.cap);
-      lid.position.y = w.h / 2;
-      mesh.add(lid);
-    } else if (w.type === 'crate') {
-      mesh = new THREE.Mesh(new THREE.BoxGeometry(w.w, w.h, w.d), mats.crate);
-    } else {
-      const tile = w.type === 'boundary' ? 2.5 : 3;
-      mesh = new THREE.Mesh(boxMapped(w.w, w.h, w.d, tile), mats[w.type] || mats.wall);
-      // כיסוי מתכת על הקיר
-      const cap = new THREE.Mesh(new THREE.BoxGeometry(w.w + 0.1, 0.12, w.d + 0.1), mats.cap);
-      cap.position.y = w.h / 2 + 0.06;
-      cap.castShadow = true;
-      mesh.add(cap);
-    }
-    mesh.position.set(w.x, w.h / 2, w.z);
-    mesh.castShadow = true;
-    mesh.receiveShadow = true;
-    scene.add(mesh);
-    wallMeshes.push(mesh);
+  const W = map.width, D = map.depth, grass = map.floor === 'grass';
+  const tile = grass ? 6 : 4;
+  const floorGeo = new THREE.PlaneGeometry(W + 2, D + 2);
+  floorGeo.attributes.uv.array.forEach((v, i, a) => { a[i] = v * (i % 2 ? (D + 2) : (W + 2)) / tile; });
+  const floor = new THREE.Mesh(floorGeo, grass ? M.grassFloor : M.concreteFloor);
+  floor.rotation.x = -Math.PI / 2;
+  floor.receiveShadow = true;
+  mapGroup.add(floor);
+  wallMeshes.push(floor);
 
-    if (w.type === 'center') {
-      // פס אזהרה בתחתית הקיר הגדול ועמודי חיזוק
-      const band = new THREE.Mesh(boxMapped(w.w, 0.6, w.d + 0.04, 1.2), mats.hazard);
-      band.position.set(w.x, 0.3, w.z);
-      band.receiveShadow = true;
-      scene.add(band);
-      for (let x = -w.w / 2 + 2; x <= w.w / 2 - 2; x += 4) {
-        const pillar = new THREE.Mesh(boxMapped(0.6, w.h + 0.3, w.d + 0.24, 3), mats.center);
-        pillar.position.set(x, (w.h + 0.3) / 2, w.z);
-        pillar.castShadow = true; pillar.receiveShadow = true;
-        scene.add(pillar);
-        wallMeshes.push(pillar);
+  // קרקע מסביב לזירה
+  const outer = new THREE.Mesh(new THREE.PlaneGeometry(600, 600), M.outer);
+  outer.rotation.x = -Math.PI / 2; outer.position.y = -0.02;
+  outer.receiveShadow = true;
+  mapGroup.add(outer);
+
+  // ערפל: במפה הענקית רואים רחוק יותר
+  scene.fog.near = map.mode === 'open' ? 40 : 30;
+  scene.fog.far = map.mode === 'open' ? 130 : 95;
+
+  for (const w of map.walls) {
+    const g = new THREE.Group();
+    g.position.set(w.x, 0, w.z);
+    g.rotation.y = w.rot || 0;
+
+    if (w.type === 'barrel') {
+      const body = new THREE.Mesh(new THREE.CylinderGeometry(w.w * 0.45, w.w * 0.45, w.h, 24), M.barrel);
+      body.position.y = w.h / 2;
+      const lid = new THREE.Mesh(new THREE.CylinderGeometry(w.w * 0.46, w.w * 0.46, 0.04, 24), M.cap);
+      lid.position.y = w.h;
+      g.add(body, lid);
+    } else if (w.type === 'crate') {
+      const box = new THREE.Mesh(new THREE.BoxGeometry(w.w, w.h, w.d), M.crate);
+      box.position.y = w.h / 2;
+      g.add(box);
+    } else if (w.type === 'container') {
+      const box = new THREE.Mesh(boxMapped(w.w, w.h, w.d, 2.6), containerMat(w.color));
+      box.position.y = w.h / 2;
+      g.add(box);
+    } else if (w.type === 'sandbag') {
+      const box = new THREE.Mesh(boxMapped(w.w, w.h, w.d, 1.2), M.sandbag);
+      box.position.y = w.h / 2;
+      g.add(box);
+    } else if (w.type === 'tree') {
+      const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.35, w.h * 0.45, 10), M.trunk);
+      trunk.position.y = w.h * 0.225;
+      g.add(trunk);
+      const leaves = M.leaves[Math.abs(Math.round(w.x * 7 + w.z * 3)) % M.leaves.length];
+      for (let i = 0; i < 3; i++) {
+        const r = 2.1 - i * 0.55, h = w.h * 0.32;
+        const cone = new THREE.Mesh(new THREE.ConeGeometry(r, h, 9), leaves);
+        cone.position.y = w.h * 0.35 + i * h * 0.55 + h / 2;
+        cone.rotation.y = i;
+        g.add(cone);
+      }
+    } else {
+      const tileSize = w.type === 'boundary' ? 2.5 : 3;
+      const mat = M[w.type] || M.wall;
+      const box = new THREE.Mesh(boxMapped(w.w, w.h, w.d, tileSize), w.type === 'pillar' ? M.center : mat);
+      box.position.y = w.h / 2;
+      g.add(box);
+      // כיסוי מתכת על הקיר
+      const cap = new THREE.Mesh(new THREE.BoxGeometry(w.w + 0.1, 0.12, w.d + 0.1), M.cap);
+      cap.position.y = w.h + 0.06;
+      g.add(cap);
+      if (w.type === 'center') {
+        // פס אזהרה בתחתית הקיר הגדול ועמודי חיזוק
+        const band = new THREE.Mesh(boxMapped(w.w, 0.6, w.d + 0.04, 1.2), M.hazard);
+        band.position.y = 0.3;
+        g.add(band);
+        for (let x = -w.w / 2 + 2; x <= w.w / 2 - 2; x += 4) {
+          const pillar = new THREE.Mesh(boxMapped(0.6, w.h + 0.3, w.d + 0.24, 3), M.center);
+          pillar.position.set(x, (w.h + 0.3) / 2, 0);
+          g.add(pillar);
+        }
       }
     }
+    add(g);
   }
 }
 
@@ -696,14 +815,15 @@ function shotEffects() {
 }
 
 // ---------- פיזיקה (זהה לשרת) ----------
+// מרחק מנקודה לתיבה מסובבת (זהה ל-maps.js בשרת)
+function distToWall(w, x, z) {
+  const dx = x - w.x, dz = z - w.z;
+  const c = Math.cos(w.rot || 0), sn = Math.sin(w.rot || 0);
+  const lx = c * dx - sn * dz, lz = sn * dx + c * dz;
+  return Math.hypot(Math.max(Math.abs(lx) - w.w / 2, 0), Math.max(Math.abs(lz) - w.d / 2, 0));
+}
 function collidesWall(x, z) {
-  const r = cfg.radius;
-  for (const w of map.walls) {
-    const cx = Math.max(w.x - w.w / 2, Math.min(x, w.x + w.w / 2));
-    const cz = Math.max(w.z - w.d / 2, Math.min(z, w.z + w.d / 2));
-    const dx = x - cx, dz = z - cz;
-    if (dx * dx + dz * dz < r * r) return true;
-  }
+  for (const w of map.walls) if (distToWall(w, x, z) < cfg.radius) return true;
   return false;
 }
 function applyMove(p, mx, mz, yaw) {
@@ -736,6 +856,8 @@ function handle(m) {
     case 'joined': {
       myId = m.id; cfg = m.cfg;
       clearDemo();
+      map = m.map;
+      buildMap();
       $('roomCode').textContent = `חדר ${m.code}`;
       menu.classList.add('hidden');
       hud.classList.remove('hidden');
@@ -743,6 +865,11 @@ function handle(m) {
       gameOver = m.state === 'over';
       break;
     }
+    case 'map': // מספר השחקנים השתנה (בסיס חדש) או משחק חדש במפה הענקית
+      map = m.map;
+      buildMap();
+      adoptYaw = true;
+      break;
     case 'error':
       $('menuError').textContent = m.msg;
       ws.onclose = null; ws.close();
@@ -804,7 +931,7 @@ function onSnapshot(list) {
     if (id === myId) {
       const wasAlive = me.alive;
       me.alive = !!alive;
-      if (p.fresh) { me.yaw = yaw; p.fresh = false; } // כיוון התחלתי מהשרת (מול מרכז המפה)
+      if (p.fresh || adoptYaw) { me.yaw = yaw; p.fresh = false; adoptYaw = false; } // כיוון התחלתי מהשרת (מול מרכז המפה)
       if (!wasAlive && me.alive) {
         me.yaw = yaw; me.pitch = 0;
         deathMsg.classList.add('hidden');
@@ -1119,7 +1246,16 @@ for (const id of ['winSelect', 'winSelect2']) {
 }
 $('winSelect').value = localStorage.getItem('win') || 10;
 $('winSelect').onchange = () => localStorage.setItem('win', $('winSelect').value);
-$('createBtn').onclick = () => startGame({ t: 'create', win: +$('winSelect').value });
+// בחירת מצב משחק: בסיסים / מפה ענקית
+let gameMode = localStorage.getItem('mode') === 'open' ? 'open' : 'bases';
+function setMode(mode) {
+  gameMode = mode;
+  localStorage.setItem('mode', mode);
+  for (const b of document.querySelectorAll('.modeBtn')) b.classList.toggle('active', b.dataset.mode === mode);
+}
+for (const b of document.querySelectorAll('.modeBtn')) b.onclick = () => setMode(b.dataset.mode);
+setMode(gameMode);
+$('createBtn').onclick = () => startGame({ t: 'create', win: +$('winSelect').value, mode: gameMode });
 $('joinBtn').onclick = () => {
   const code = $('codeInput').value.trim().toUpperCase();
   if (code.length !== 4) { $('menuError').textContent = 'הקוד צריך להיות 4 אותיות'; return; }
@@ -1235,6 +1371,9 @@ function loop(now) {
     fpRifle.rotation.set(recoil * 0.09 + swayY * 2, 0.04 + swayX * 2, 0);
     if (now - lastShotTime > 45) fpFlash.visible = false;
     camera.updateMatrixWorld();
+    // הצל עוקב אחרי השחקן (חשוב במפה הענקית)
+    sun.target.position.set(Math.round(camera.position.x), 0, Math.round(camera.position.z));
+    sun.position.copy(sun.target.position).addScaledVector(sunDir, 45);
     flashLight.position.copy(camera.position);
     flashLight.intensity *= Math.pow(0.0005, dt);
     wFlashLight.position.set(0.17, -0.1, -1);
@@ -1304,7 +1443,7 @@ function loop(now) {
 async function init() {
   buildTextures();
   const [mapData, gltf] = await Promise.all([
-    fetch('/map.json').then(r => r.json()),
+    fetch('/api/menu-map').then(r => r.json()),
     new GLTFLoader().loadAsync('/models/soldier.glb'),
   ]);
   map = mapData;

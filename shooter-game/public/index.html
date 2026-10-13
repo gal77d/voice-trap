@@ -45,7 +45,7 @@
     <div id="fireBtn"><div class="fireIcon"></div></div>
     <div id="money">💰 0</div>
     <div id="powers">
-      <div id="shieldBtn" class="powerBtn" data-kind="shield"><div class="pIcon">🛡️</div><div class="pLabel">$200</div></div>
+      <div id="shieldBtn" class="powerBtn" data-kind="shield"><div class="pIcon">🛡️</div><div class="pLabel">$300</div></div>
       <div id="scopeBtn" class="powerBtn" data-kind="scope"><div class="pIcon">🎯</div><div class="pLabel">חינם</div></div>
     </div>
     <div id="deathMsg" class="hidden"></div>
@@ -55,8 +55,12 @@
   <div id="menu" class="ui" dir="rtl">
     <div class="card">
       <h1>SHOT<span>ARROW</span></h1>
-      <p class="sub">שמעת יריה? החץ יראה לך מאיפה.<br>הקיר באמצע עוצר את העין, לא את הכדור.</p>
+      <p class="sub">שמעת יריה? החץ יראה לך מאיפה.<br>קירות עוצרים את העין, לא את הכדור.</p>
       <input id="nameInput" maxlength="12" placeholder="השם שלך" autocomplete="off">
+      <div class="row modeRow">
+        <button class="modeBtn" data-mode="bases">🧱 בסיסים</button>
+        <button class="modeBtn" data-mode="open">🌍 מפה ענקית</button>
+      </div>
       <div class="row winRow">
         <label for="winSelect">משחק עד</label>
         <select id="winSelect"></select>
