@@ -220,15 +220,15 @@ const CFG = {
   // פיזיקה
   PHYS_HZ: 120,            // קצב צעד פיזיקה קבוע
   MAX_STEPS: 10,           // מקסימום צעדים בפריים (מונע "ספירלת מוות")
-  GRAVITY: 1500,           // כוח משיכה (יחידות עולם לשנייה²)
+  GRAVITY: 1650,           // כוח משיכה (יחידות עולם לשנייה²)
   AIR_DRAG: 0.05,          // דעיכה אווירית עדינה בתעופה
   SWING_DAMP: 0.04,        // דעיכה זוויתית בזמן נדנוד
-  MAX_SPEED: 1450,         // מהירות מקסימלית בתעופה (נגד "פיצוצים")
-  MAX_SWING_SPEED: 1080,   // מהירות משיקית מקסימלית על החבל
-  PUMP_ACCEL: 560,         // "שאיבה" — תאוצה משיקית בחלק התחתון של הנדנוד
-  RELEASE_BOOST: 1.04,     // בונוס קטן לתנופה ברגע השחרור (תחושת ארקייד)
+  MAX_SPEED: 2300,         // מהירות מקסימלית בתעופה (נגד "פיצוצים")
+  MAX_SWING_SPEED: 1650,   // מהירות משיקית מקסימלית על החבל
+  PUMP_ACCEL: 1000,         // "שאיבה" — תאוצה משיקית בחלק התחתון של הנדנוד
+  RELEASE_BOOST: 1.08,     // בונוס קטן לתנופה ברגע השחרור (תחושת ארקייד)
   ROPE_MIN: 50,            // אורך חבל מינימלי
-  ROPE_MAX: 235,           // טווח תפיסה = אורך חבל מקסימלי
+  ROPE_MAX: 285,           // טווח תפיסה = אורך חבל מקסימלי
   ROPE_SEGS: 12,           // נקודות בחבל הוויזואלי
   ROPE_SHOOT_TIME: 0.07,   // זמן "ירי" החבל לנקודה
   HAND_OFFSET: 26,         // מרחק הידיים ממרכז הגורילה
@@ -239,14 +239,14 @@ const CFG = {
   INPUT_BUFFER: 0.14,      // לחיצה קצרה נשמרת לזמן קצר
   BUFFER_MIN_HOLD: 0.18,   // תפיסה מבאפר מחזיקה לפחות כך
   // עולם
-  VIEW_H: 680,             // גובה העולם הנראה (לפני זום)
-  WATER_Y: 650,            // פני הנהר — נפילה = מוות
+  VIEW_H: 760,             // גובה העולם הנראה (לפני זום)
+  WATER_Y: 710,            // פני הנהר — נפילה = מוות
   START_X: 300,
   PEG_Y_MIN: 90, PEG_Y_MAX: 370,
-  DIFF_DIST: 15000,        // אחרי כמה יחידות הקושי מקסימלי
-  GAP_EASY: [250, 330], GAP_HARD: [330, 500],
+  DIFF_DIST: 24000,        // אחרי כמה יחידות הקושי מקסימלי
+  GAP_EASY: [400, 500], GAP_HARD: [500, 700],
   BREAK_TIME: [1.5, 0.8],  // זמן עד שנקודה נשברת (קל → קשה)
-  POWER_GAP: 2600,         // מרווח מינימלי בין פאוור-אפים
+  POWER_GAP: 3800,         // מרווח מינימלי בין פאוור-אפים
   PX_PER_M: 40,            // יחידות עולם למטר
   // פאוור-אפים
   MAGNET_TIME: 8, MAGNET_R: 270,
@@ -255,7 +255,7 @@ const CFG = {
   // קומבו
   COMBO_PER_MULT: 3, COMBO_MAX_MULT: 6, COMBO_HOLD_LIMIT: 3.2,
   // מצלמה
-  LOOKAHEAD: 0.38, CAM_LERP_X: 4.5, CAM_LERP_Y: 3, ZOOM_OUT_MAX: 0.17,
+  LOOKAHEAD: 0.38, CAM_LERP_X: 6, CAM_LERP_Y: 3, ZOOM_OUT_MAX: 0.26,
   // ביצועים
   DPR_MAX: 2, MAX_PARTICLES: 380,
 };
@@ -521,7 +521,7 @@ function newWorld() {
   P.rot = Math.atan2(p0.x - P.x, -(p0.y - P.y));
   createRope(p0);
   G.rope.shoot = 1;
-  generate(CFG.START_X + 2600);
+  generate(CFG.START_X + 3600);
   G.cam.x = P.x + 260; G.cam.y = 380;
 }
 
@@ -705,7 +705,7 @@ function step(dt) {
   // --- יצירה וניקוי ---
   if ((G.step & 15) === 0) {
     const halfW = (W / 2) / (baseScale * G.cam.zoom) + 50;
-    generate(G.cam.x + halfW + 1200);
+    generate(G.cam.x + halfW + 1800);
     if ((G.step & 63) === 0) cleanup(G.cam.x - halfW - 500);
   }
   if (state === 'play') G.maxX = Math.max(G.maxX, P.x);
@@ -1080,10 +1080,10 @@ function updateFrame(fdt, alpha) {
   const speed = Math.hypot(P.vx, P.vy);
 
   // --- מצלמה חלקה עם look-ahead וזום-אאוט במהירות ---
-  const zoomT = 1 - CFG.ZOOM_OUT_MAX * clamp((speed - 450) / 800, 0, 1);
+  const zoomT = 1 - CFG.ZOOM_OUT_MAX * clamp((speed - 600) / 1200, 0, 1);
   cam.zoom += (zoomT - cam.zoom) * (1 - Math.exp(-2.2 * fdt));
   const sc = baseScale * cam.zoom, viewH = H / sc, viewW = W / sc;
-  const look = clamp(P.vx * CFG.LOOKAHEAD, -120, 330);
+  const look = clamp(P.vx * CFG.LOOKAHEAD, -150, 480);
   const tx = ix + look + viewW * 0.12;
   const ty = Math.min(CFG.WATER_Y + 70 - viewH / 2, iy + 110);
   const oldX = cam.x;
