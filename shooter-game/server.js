@@ -23,34 +23,11 @@ const MAX_INPUTS_PER_TICK = 4;     // הגנה בסיסית מפני "ספידה
 const COLORS = ['#ff4d4d', '#4da6ff', '#5cd65c', '#ffcc33'];
 
 // ---------- המפה ----------
+// המפה משותפת לשרת וללקוח: public/map.json
 // כל קיר הוא תיבה: מרכז (x,z), רוחב w (ציר X), עומק d (ציר Z), גובה h
-const MAP_SIZE = 30; // הזירה מ- -15 עד 15
-const WALL_H = 3;
-const WALLS = [
-  // קירות חיצוניים
-  { x: 0, z: -15.5, w: 32, d: 1, h: WALL_H },
-  { x: 0, z: 15.5, w: 32, d: 1, h: WALL_H },
-  { x: -15.5, z: 0, w: 1, d: 32, h: WALL_H },
-  { x: 15.5, z: 0, w: 1, d: 32, h: WALL_H },
-  // קירות פנימיים
-  { x: 0, z: 0, w: 6, d: 1, h: WALL_H },
-  { x: 0, z: 0, w: 1, d: 6, h: WALL_H },
-  { x: -8, z: -8, w: 6, d: 1, h: WALL_H },
-  { x: -10.5, z: -5.5, w: 1, d: 4, h: WALL_H },
-  { x: 8, z: 8, w: 6, d: 1, h: WALL_H },
-  { x: 10.5, z: 5.5, w: 1, d: 4, h: WALL_H },
-  { x: 8, z: -8, w: 1, d: 6, h: WALL_H },
-  { x: -8, z: 8, w: 1, d: 6, h: WALL_H },
-  { x: -3, z: -11, w: 4, d: 1, h: WALL_H },
-  { x: 3, z: 11, w: 4, d: 1, h: WALL_H },
-  { x: 11, z: -1, w: 3, d: 3, h: WALL_H },
-  { x: -11, z: 1, w: 3, d: 3, h: WALL_H },
-];
-const SPAWNS = [
-  { x: -12, z: -12 }, { x: 12, z: 12 }, { x: 12, z: -12 }, { x: -12, z: 12 },
-  { x: 0, z: -7 }, { x: 0, z: 7 }, { x: -6, z: 0 }, { x: 6, z: 0 },
-  { x: -5, z: -13 }, { x: 5, z: 13 }, { x: 13, z: 4 }, { x: -13, z: -4 },
-];
+const MAP = JSON.parse(fs.readFileSync(path.join(PUBLIC_DIR, 'map.json'), 'utf8'));
+const WALLS = MAP.walls;
+const SPAWNS = MAP.spawns;
 
 // ---------- פיזיקה ----------
 function collidesWall(x, z) {
@@ -148,7 +125,6 @@ function addPlayer(room, ws, name) {
   ws.player = p; ws.room = room;
   send(ws, {
     t: 'joined', id: p.id, code: room.code,
-    map: { size: MAP_SIZE, walls: WALLS },
     cfg: { speed: MOVE_SPEED, radius: PLAYER_RADIUS, tick: TICK_RATE, win: WIN_SCORE, eye: EYE_HEIGHT },
     state: room.state,
   });
@@ -248,8 +224,11 @@ function restart(room) {
 }
 
 // ---------- שרת HTTP לקבצים סטטיים ----------
+const THREE_DIR = path.join(__dirname, 'node_modules', 'three');
 const MIME = {
   '.html': 'text/html; charset=utf-8',
+  '.json': 'application/json; charset=utf-8',
+  '.glb': 'model/gltf-binary',
   '.js': 'text/javascript; charset=utf-8',
   '.css': 'text/css; charset=utf-8',
   '.png': 'image/png',
@@ -258,11 +237,20 @@ const MIME = {
 const server = http.createServer((req, res) => {
   let urlPath = decodeURIComponent(req.url.split('?')[0]);
   if (urlPath === '/') urlPath = '/index.html';
-  const filePath = path.join(PUBLIC_DIR, path.normalize(urlPath));
-  if (!filePath.startsWith(PUBLIC_DIR)) { res.writeHead(403); return res.end(); }
+  // Three.js מוגש מ-node_modules, כך שלא צריך CDN חיצוני
+  let base = PUBLIC_DIR;
+  if (urlPath.startsWith('/vendor/three/')) {
+    base = THREE_DIR;
+    urlPath = urlPath.slice('/vendor/three'.length);
+  }
+  const filePath = path.join(base, path.normalize(urlPath));
+  if (!filePath.startsWith(base + path.sep)) { res.writeHead(403); return res.end(); }
   fs.readFile(filePath, (err, data) => {
     if (err) { res.writeHead(404); return res.end('Not found'); }
-    res.writeHead(200, { 'Content-Type': MIME[path.extname(filePath)] || 'application/octet-stream' });
+    const ext = path.extname(filePath);
+    const headers = { 'Content-Type': MIME[ext] || 'application/octet-stream' };
+    if (base === THREE_DIR || ext === '.glb') headers['Cache-Control'] = 'public, max-age=86400';
+    res.writeHead(200, headers);
     res.end(data);
   });
 });

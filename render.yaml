@@ -1,0 +1,11 @@
+# Render Blueprint: one-click deploy of the Shot Arrow game server
+services:
+  - type: web
+    name: shot-arrow
+    runtime: node
+    plan: free
+    branch: claude/handwriting-to-font-app-x7xfvv
+    rootDir: shooter-game
+    buildCommand: npm install
+    startCommand: npm start
+    autoDeploy: true

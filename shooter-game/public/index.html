@@ -6,50 +6,71 @@
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="theme-color" content="#0b0f1a">
   <title>Shot Arrow</title>
+  <link rel="icon" href="data:,">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;700;900&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css">
   <script type="importmap">
-    { "imports": { "three": "https://unpkg.com/three@0.160.0/build/three.module.js" } }
+    {
+      "imports": {
+        "three": "/vendor/three/build/three.module.js",
+        "three/addons/": "/vendor/three/examples/jsm/"
+      }
+    }
   </script>
 </head>
 <body>
   <div id="game"></div>
+  <div id="vignette"></div>
+  <div id="damage"></div>
 
   <!-- HUD בזמן משחק -->
   <div id="hud" class="hidden">
     <div id="roomCode"></div>
     <div id="scoreboard"></div>
     <div id="killfeed"></div>
-    <div id="crosshair"></div>
+    <div id="crosshair"><i></i><i></i><i></i><i></i></div>
+    <div id="hitMarker"></div>
     <div id="hitText"></div>
     <div id="arrows"></div>
     <div id="joyBase"><div id="joyKnob"></div></div>
-    <div id="fireBtn">🔫</div>
+    <div id="fireBtn"><div class="fireIcon"></div></div>
     <div id="deathMsg" class="hidden"></div>
   </div>
 
   <!-- תפריט פתיחה -->
   <div id="menu" class="ui" dir="rtl">
-    <h1>🎯 Shot Arrow</h1>
-    <p class="sub">שמעת יריה? החץ יראה לך מאיפה. תירה דרך הקיר!</p>
-    <input id="nameInput" maxlength="12" placeholder="השם שלך" autocomplete="off">
-    <button id="createBtn">צור חדר חדש</button>
-    <div class="row">
-      <input id="codeInput" maxlength="4" placeholder="קוד" autocomplete="off" autocapitalize="characters">
-      <button id="joinBtn">הצטרף</button>
+    <div class="card">
+      <h1>SHOT<span>ARROW</span></h1>
+      <p class="sub">שמעת יריה? החץ יראה לך מאיפה.<br>הקיר באמצע עוצר את העין, לא את הכדור.</p>
+      <input id="nameInput" maxlength="12" placeholder="השם שלך" autocomplete="off">
+      <button id="createBtn">צור חדר חדש</button>
+      <div class="divider">או הצטרף לחברים</div>
+      <div class="row">
+        <input id="codeInput" maxlength="4" placeholder="קוד" autocomplete="off" autocapitalize="characters">
+        <button id="joinBtn" class="secondary">הצטרף</button>
+      </div>
+      <div id="menuError"></div>
     </div>
-    <div id="menuError"></div>
   </div>
+
+  <!-- מסך טעינה -->
+  <div id="loading" class="ui"><div class="spinner"></div><div>טוען גרפיקה...</div></div>
 
   <!-- מסך סיכום -->
   <div id="over" class="ui hidden" dir="rtl">
-    <h2 id="overTitle"></h2>
-    <div id="overBoard"></div>
-    <button id="restartBtn">משחק חדש</button>
+    <div class="card">
+      <h2 id="overTitle"></h2>
+      <div id="overBoard"></div>
+      <button id="restartBtn">משחק חדש</button>
+    </div>
   </div>
 
   <!-- בקשה לסובב את המסך -->
-  <div id="rotate" class="ui" dir="rtl">📱↻<br>סובב את הטלפון לרוחב</div>
+  <div id="rotate" class="ui" dir="rtl"><div class="phone"></div>סובב את הטלפון לרוחב</div>
 
   <script type="module" src="game.js"></script>
 </body>
