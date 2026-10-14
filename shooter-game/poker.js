@@ -82,6 +82,77 @@ function handName(b) {
   }
 }
 
+// ---------- בוטים ----------
+const BOT_NAMES = ['רובי', 'צ\'יפ', 'מקס', 'לולו', 'ביפ', 'טורבו', 'נינג\'ה'];
+const BOT_THINK_MS = [700, 1600];
+
+function equity(hole, board, nOpp, iters) {
+  const used = new Set(hole.concat(board).map(c => c.id));
+  const rest = newDeck().filter(c => !used.has(c.id));
+  const need = 5 - board.length + 2 * nOpp;
+  let won = 0;
+  for (let it = 0; it < iters; it++) {
+    for (let i = 0; i < need; i++) {
+      const j = i + Math.floor(Math.random() * (rest.length - i));
+      const t = rest[i]; rest[i] = rest[j]; rest[j] = t;
+    }
+    const b = board.concat(rest.slice(0, 5 - board.length));
+    const my = best(hole.concat(b)).score;
+    let lost = false, ties = 0, k = 5 - board.length;
+    for (let o = 0; o < nOpp; o++) {
+      const s = best([rest[k], rest[k + 1]].concat(b)).score;
+      k += 2;
+      if (s > my) { lost = true; break; }
+      if (s === my) ties++;
+    }
+    if (!lost) won += 1 / (ties + 1);
+  }
+  return won / iters;
+}
+
+// החלטת בוט לפי סיכויי הניצחון שלו מול השחקנים שנשארו ביד
+function botDecide(room, p) {
+  const opp = live(room).length - 1;
+  const eq = equity(p.hand, room.board, opp, room.board.length === 0 ? 160 : 220);
+  const toCall = Math.min(room.currentBet - p.bet, p.chips);
+  const pot = potTotal(room);
+  const odds = toCall / (pot + toCall || 1);
+  const rel = eq * (opp + 1);
+  const agg = p.agg, r = Math.random();
+  const stack = p.chips + p.bet;
+  const raiseTo = frac => {
+    let to = room.currentBet + Math.max(room.minRaise, Math.round(pot * frac / room.bb) * room.bb);
+    if (to >= stack * 0.7) to = stack;
+    return { a: 'raise', to };
+  };
+  if (eq > 0.82 && opp <= 2 && r < 0.35 * agg) return { a: 'raise', to: stack };
+  if (toCall <= 0) {
+    if (rel * agg > 1.45 && r < 0.75) return raiseTo(0.45 + Math.random() * 0.45);
+    if (r < 0.07 * agg + 0.05 * p.loose) return raiseTo(0.5);
+    return { a: 'call' };
+  }
+  const bigBet = toCall > p.chips * 0.5;
+  if (rel * agg > 2.0 && r < 0.55 && !bigBet) return raiseTo(0.6 + Math.random() * 0.5);
+  if (bigBet && eq < 0.5 && rel < 1.6) return { a: 'fold' };
+  if (eq >= odds * (1.05 - 0.2 * p.loose)) return { a: 'call' };
+  if (room.board.length === 0 && toCall <= room.bb && rel > 0.75) return { a: 'call' };
+  if (r < 0.04 * agg && toCall < pot * 0.4) return { a: 'call' };
+  return { a: 'fold' };
+}
+
+function addBot(room) {
+  if (room.players.filter(q => !q.left).length >= MAX_SEATS) return;
+  const used = new Set(room.players.map(q => q.name));
+  const name = BOT_NAMES.find(n => !used.has(n)) || 'בוט ' + (room.players.length + 1);
+  room.players.push({
+    id: nextId++, bot: true, ws: null, name, connected: true,
+    agg: 0.75 + Math.random() * 0.6, loose: Math.random(),
+    chips: room.startChips, hand: [], bet: 0, total: 0, folded: true, allIn: false,
+    out: room.state === 'over', left: false, revealed: false, last: '', lastCls: '', waiting: room.state !== 'lobby' && room.state !== 'over',
+  });
+}
+const humansOnline = room => room.players.some(q => !q.bot && !q.left && q.connected);
+
 // ---------- חדרים ----------
 const rooms = new Map(); // code -> room
 let nextId = 1;
@@ -143,10 +214,10 @@ function removePlayer(room, p) {
     dropPlayer(room, p);
   }
   if (room.hostId === p.id) {
-    const h = room.players.find(q => !q.left);
+    const h = room.players.find(q => !q.left && !q.bot);
     room.hostId = h ? h.id : 0;
   }
-  if (!room.players.some(q => !q.left)) return closeRoom(room);
+  if (!room.players.some(q => !q.left && !q.bot)) return closeRoom(room);
   broadcastState(room);
 }
 
@@ -251,9 +322,18 @@ function proceed(room, fromIdx) {
 
 function startTurn(room, p) {
   clearTurn(room);
+  const hid = room.handId;
+  if (p.bot) {
+    const ms = BOT_THINK_MS[0] + Math.random() * (BOT_THINK_MS[1] - BOT_THINK_MS[0]);
+    room.turnEndsAt = 0;
+    room.turnTimer = setTimeout(() => {
+      if (room.handId !== hid || room.players[room.toAct] !== p) return;
+      act(room, p, botDecide(room, p));
+    }, ms);
+    return;
+  }
   const ms = p.connected ? TURN_MS : AWAY_TURN_MS;
   room.turnEndsAt = Date.now() + ms;
-  const hid = room.handId;
   room.turnTimer = setTimeout(() => {
     if (room.handId !== hid || room.players[room.toAct] !== p) return;
     // נגמר הזמן: צ'ק אם אפשר, אחרת פולד
@@ -290,7 +370,6 @@ function act(room, p, m) {
   room.need.delete(p.id);
   if (raised) room.need = new Set(room.players.filter(q => canAct(q) && q !== p).map(q => q.id));
   room.toAct = -1;
-  room.lastActive = Date.now();
   proceed(room, idx + 1);
 }
 
@@ -385,6 +464,8 @@ function scheduleNext(room) {
   room.stepTimer = setTimeout(() => {
     if (room.handId !== hid || !rooms.has(room.code)) return;
     room.busy = false;
+    // כשאף שחקן אמיתי לא מחובר, הבוטים מחכים במקום לשחק לבד
+    if (!humansOnline(room)) { room.paused = true; return; }
     startHand(room);
   }, NEXT_HAND_MS);
 }
@@ -403,7 +484,7 @@ function viewFor(room, me) {
     board: room.board, startChips: room.startChips, winnerId: room.winnerId,
     result: room.state === 'result' ? room.result : null,
     players: room.players.filter(p => !p.left || inHand).map(p => ({
-      id: p.id, name: p.name, chips: p.chips, bet: p.bet, folded: p.folded, allIn: p.allIn,
+      id: p.id, name: p.name, bot: !!p.bot, chips: p.chips, bet: p.bet, folded: p.folded, allIn: p.allIn,
       out: p.out, waiting: p.waiting, connected: p.connected && !p.left, last: p.last, lastCls: p.lastCls,
       nCards: p.hand.length,
       cards: (p === me || p.revealed) ? p.hand : null,
@@ -411,7 +492,7 @@ function viewFor(room, me) {
   };
 }
 function broadcastState(room) {
-  for (const p of room.players) if (p.connected) send(p.ws, viewFor(room, p));
+  for (const p of room.players) if (p.connected && !p.bot) send(p.ws, viewFor(room, p));
 }
 
 // ---------- WebSocket ----------
@@ -434,7 +515,9 @@ function createPokerWss() {
       if (m.t === 'create' && !room) {
         const r = createRoom(m.chips);
         addPlayer(r, ws, cleanName(m.name));
-        broadcastState(r);
+        const nb = Math.max(0, Math.min(MAX_SEATS - 1, Math.round(+m.bots || 0)));
+        for (let i = 0; i < nb; i++) addBot(r);
+        if (nb && m.autostart) startGame(r); else broadcastState(r);
       } else if (m.t === 'join' && !room) {
         const r = rooms.get(String(m.code || '').toUpperCase().trim());
         if (!r) return send(ws, { t: 'error', msg: 'לא מצאנו חדר עם הקוד הזה' });
@@ -447,8 +530,15 @@ function createPokerWss() {
         const q = r && r.players.find(x => x.token === m.token && !x.left);
         if (!q) return send(ws, { t: 'gone' });
         bind(ws, r, q);
+        if (r.paused) { r.paused = false; startHand(r); return; }
         if (r.state === 'hand' && r.players[r.toAct] === q) startTurn(r, q);
         broadcastState(r);
+      } else if (m.t === 'addBot' && p && room.hostId === p.id) {
+        addBot(room);
+        broadcastState(room);
+      } else if (m.t === 'removeBot' && p && room.hostId === p.id && room.state !== 'hand' && room.state !== 'result') {
+        const b = room.players.find(q => q.bot && q.id === m.id);
+        if (b) { dropPlayer(room, b); broadcastState(room); }
       } else if (m.t === 'start' && p && room.hostId === p.id) {
         startGame(room);
       } else if (m.t === 'act' && p) {
@@ -476,7 +566,7 @@ function createPokerWss() {
     }
     const now = Date.now();
     for (const room of rooms.values()) {
-      if (!room.players.some(p => p.connected) && now - room.lastActive > ROOM_IDLE_MS) closeRoom(room);
+      if (!humansOnline(room) && now - room.lastActive > ROOM_IDLE_MS) closeRoom(room);
     }
   }, 10000);
 

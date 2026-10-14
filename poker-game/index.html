@@ -411,6 +411,7 @@ function seatGeo(i){
     return {seat:{x:seat.x,y:seat.y+8},cards,bet:{x:g.cx-(g.portrait?150:170),y:cards.y-10},dealer:{x:g.cx+(g.portrait?120:150),y:cards.y+30}};
   }
   const seat=g.pt(a,1.0),cards=g.pt(a,.74),bet=g.pt(a,.5);
+  seat.x=Math.max(72,Math.min(g.W-72,seat.x)); // keep side plates on screen
   const d=g.pt(a+(a>90&&a<270?-13:13),.66);
   // cards sit slightly toward the center from the plate
   return {seat,cards,bet,dealer:d};

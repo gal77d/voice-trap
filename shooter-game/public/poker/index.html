@@ -224,6 +224,7 @@ button:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
 .plist div{display:flex;align-items:center;gap:8px;background:rgba(255,255,255,.04);border-radius:10px;padding:8px 10px;font-weight:600}
 .plist .tag{margin-inline-start:auto;font-size:12px;color:var(--gold);font-weight:600}
 .plist .off{color:var(--ink-dim)}
+.plist .rm{margin-inline-start:8px;width:30px;height:30px;border-radius:8px;border:1px solid rgba(217,180,91,.4);background:rgba(0,0,0,.3);color:var(--ink);font-size:16px;line-height:1}
 .btn.ghost{background:rgba(255,255,255,.06);border:1px solid rgba(217,180,91,.4);box-shadow:none;color:var(--ink);font-size:15px;height:42px}
 .err{color:#ff8a80;font-weight:600;min-height:1.2em}
 .hint{color:var(--ink-dim);font-size:13px}
@@ -291,6 +292,10 @@ button:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
     <div class="lab">ז'יטונים לכל שחקן</div>
     <div class="seg" id="segChips"><button>500</button><button class="on">1000</button><button>2500</button><button>5000</button></div>
     <button class="btn go" id="bCreate">צור חדר פרטי</button>
+    <div class="or">או משחק נגד בוטים</div>
+    <div class="lab">כמה בוטים</div>
+    <div class="seg" id="segBots"><button>1</button><button>2</button><button class="on">3</button><button>4</button><button>5</button></div>
+    <button class="btn call" id="bBots" style="width:100%;height:50px">שחק נגד בוטים</button>
     <div class="or">או הצטרפות לחדר של חבר</div>
     <div class="joinrow">
       <input id="joinCode" maxlength="4" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="קוד" aria-label="קוד החדר">
@@ -307,6 +312,7 @@ button:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
     <button class="btn raise" id="bShare" style="width:100%">שלח לחברים</button>
     <p class="hint">החברים פותחים את הקישור, או נכנסים לאתר ומקלידים את הקוד. עד 6 שחקנים.</p>
     <div class="plist" id="plist"></div>
+    <button class="btn ghost" id="bAddBot">+ הוסף בוט</button>
     <button class="btn go" id="bStart">התחל משחק</button>
     <div class="hint" id="waitHint"></div>
     <button class="btn ghost" id="bBack">חזרה לשולחן</button>
@@ -402,7 +408,7 @@ function layout(){
   Object.assign(table.style,{left:T.x+'px',top:T.y+'px',width:T.w+'px',height:T.h+'px'});
   const cx=T.x+T.w/2,cy=T.y+T.h/2,rx=T.w/2,ry=T.h/2;
   const pt=(a,k)=>{const r=a*Math.PI/180,c=Math.cos(r),sn=Math.sin(r),e=.72;return {x:cx+k*rx*Math.sign(c)*Math.abs(c)**e,y:cy+k*ry*Math.sign(sn)*Math.abs(sn)**e}};
-  geo={portrait,cx,cy,rx,ry,pt};
+  geo={portrait,W,cx,cy,rx,ry,pt};
   table.querySelectorAll('.cup').forEach(e=>e.remove());
   for(const a of [122,182,242,298,358,58]){
     const p=pt(a,1),el=document.createElement('div');el.className='cup';
@@ -421,7 +427,8 @@ function seatGeo(rel,n){
     const seat=g.pt(90,1.0),cards=g.pt(90,.66);
     return {seat:{x:seat.x,y:seat.y+8},cards,bet:{x:g.cx-(g.portrait?150:170),y:cards.y-10},dealer:{x:g.cx+(g.portrait?120:150),y:cards.y+30}};
   }
-  return {seat:g.pt(a,1.0),cards:g.pt(a,.74),bet:g.pt(a,.5),dealer:g.pt(a+(a>90&&a<270?-13:13),.66)};
+  const seat=g.pt(a,1.0);seat.x=Math.max(72,Math.min(g.W-72,seat.x)); // keep side plates on screen
+  return {seat,cards:g.pt(a,.74),bet:g.pt(a,.5),dealer:g.pt(a+(a>90&&a<270?-13:13),.66)};
 }
 function pos(el,p){el.style.left=p.x+'px';el.style.top=p.y+'px'}
 window.addEventListener('resize',()=>requestAnimationFrame(layout));
@@ -433,8 +440,8 @@ function ensureSeat(p,isMe){
   let e=seatEls.get(p.id);
   if(e)return e;
   const seat=document.createElement('div');seat.className='seat abs'+(isMe?' me':'');
-  const letter=esc((p.name||'?').trim().charAt(0)||'?');
-  seat.innerHTML=(isMe?'':`<div class="avatar letter">${letter}</div>`)+`<div class="plate"><div class="nm"></div><div class="ch"></div><div class="hn"></div><div class="timer"><i></i></div></div><div class="bubble"></div>`;
+  const letter=p.bot?'🤖':esc((p.name||'?').trim().charAt(0)||'?');
+  seat.innerHTML=(isMe?'':`<div class="avatar${p.bot?'':' letter'}">${letter}</div>`)+`<div class="plate"><div class="nm"></div><div class="ch"></div><div class="hn"></div><div class="timer"><i></i></div></div><div class="bubble"></div>`;
   const hole=document.createElement('div');hole.className='hole abs'+(isMe?'':' sm');
   const bet=document.createElement('div');bet.className='bet abs';
   seatsEl.append(hole,bet,seat);
@@ -626,8 +633,11 @@ function screens(){
   ov.hidden=!showWait;
   $('scrWait').hidden=!showWait;
   $('codeBig').textContent=S.code;
-  $('plist').innerHTML=S.players.map(p=>`<div><span>${esc(p.name)}${p.id===S.you?' (את/ה)':''}</span><span class="tag ${p.connected?'':'off'}">${p.id===S.host?'מארח':''}${p.connected?'':' · מנותק'}</span></div>`).join('');
   const isHost=S.host===S.you,enough=S.players.length>=2;
+  const canEdit=isHost&&(S.state==='lobby'||S.state==='over');
+  $('plist').innerHTML=S.players.map(p=>`<div><span>${p.bot?'🤖 ':''}${esc(p.name)}${p.id===S.you?' (את/ה)':''}</span><span class="tag ${p.connected?'':'off'}">${p.id===S.host?'מארח':''}${p.bot?'בוט':''}${p.connected?'':' · מנותק'}</span>${p.bot&&canEdit?`<button class="rm" data-rm="${p.id}" aria-label="הסר את ${esc(p.name)}">✕</button>`:''}</div>`).join('');
+  $('plist').querySelectorAll('[data-rm]').forEach(b=>b.onclick=()=>send({t:'removeBot',id:+b.dataset.rm}));
+  $('bAddBot').hidden=!isHost||S.players.length>=6;
   $('bStart').hidden=!isHost||S.state==='hand'||S.state==='result';
   $('bStart').disabled=!enough;
   $('bStart').textContent=S.state==='over'?'משחק חדש':'התחל משחק';
@@ -697,6 +707,11 @@ function getName(){
   if(!n){$('menuErr').textContent='כתבו שם כדי שהחברים יזהו אתכם';$('nameIn').focus();return null}
   store.set('pokerName',n);$('menuErr').textContent='';return n;
 }
+let optBots=3;
+const segB=$('segBots');
+segB.querySelectorAll('button').forEach(b=>b.onclick=()=>{segB.querySelectorAll('button').forEach(x=>x.classList.remove('on'));b.classList.add('on');optBots=+b.textContent});
+$('bBots').onclick=()=>{const name=getName();if(!name)return;initAudio();connect(()=>send({t:'create',name,chips:optChips,bots:optBots,autostart:true}))};
+$('bAddBot').onclick=()=>send({t:'addBot'});
 $('bCreate').onclick=()=>{const name=getName();if(!name)return;initAudio();connect(()=>send({t:'create',name,chips:optChips}))};
 $('bJoin').onclick=()=>{
   const name=getName();if(!name)return;
